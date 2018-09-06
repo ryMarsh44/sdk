@@ -3,7 +3,9 @@ extern crate serde_json;
 
 use std::collections::HashMap;
 use std::vec::Vec;
+use std::fmt;
 use utils::error;
+use messages::MsgUtils;
 use messages::validation;
 
 static PROOF_REQUEST: &str = "PROOF_REQUEST";
@@ -11,14 +13,14 @@ static PROOF_DATA: &str = "proof_request_data";
 static REQUESTED_ATTRS: &str = "requested_attributes";
 static REQUESTED_PREDICATES: &str = "requested_predicates";
 
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 struct ProofType {
     name: String,
     #[serde(rename = "version")]
     type_version: String,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 struct ProofTopic {
     mid: u32,
     tid: u32,
@@ -72,175 +74,162 @@ pub struct ProofRequestMessage{
     #[serde(rename = "@topic")]
     topic: ProofTopic,
     pub proof_request_data: ProofRequestData,
-    #[serde(skip_serializing, default)]
-    validate_rc: u32,
     pub msg_ref_id: Option<String>,
 }
 
-impl ProofPredicates {
-    pub fn create() -> ProofPredicates {
-        ProofPredicates {
-            predicates: Vec::new()
-        }
-    }
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
+pub struct ProofRequestBuilder {
+    tid: Option<Result<u32, u32>>,
+    mid: Option<Result<u32, u32>>,
+    type_version: Option<Result<String, u32>>,
+    nonce: Option<Result<String, u32>>,
+    name: Option<Result<String, u32>>,
+    data_version: Option<Result<String, u32>>,
+    requested_attributes: Option<Result<HashMap<String, AttrInfo>, u32>>,
+    requested_predicates: Option<Result<HashMap<String, PredicateInfo>, u32>>,
+    msg_ref_id: Option<Result<String, u32>>
 }
 
-impl ProofRequestMessage {
-    pub fn create() -> ProofRequestMessage {
-        ProofRequestMessage {
-            type_header: ProofType {
-                name: String::from(PROOF_REQUEST),
-                type_version: String::new(),
-            },
-            topic: ProofTopic {
-                tid: 0,
-                mid: 0,
-            },
-            proof_request_data: ProofRequestData {
-                nonce: String::new(),
-                name: String::new(),
-                data_version: String::new(),
-                requested_attributes:HashMap::new(),
-                requested_predicates: HashMap::new(),
-            },
-            validate_rc: 0,
-            msg_ref_id: None,
+impl MsgUtils for ProofRequestBuilder {}
+impl ProofRequestBuilder {
+    pub fn new() -> ProofRequestBuilder {
+        ProofRequestBuilder {
+            tid: None,
+            mid: None,
+            type_version: None,
+            nonce: None,
+            name: None,
+            data_version: None,
+            requested_attributes: None,
+            requested_predicates: None,
+            msg_ref_id: None
         }
     }
 
-    pub fn type_version(&mut self, version: &str) -> &mut Self {
-        self.type_header.type_version = String::from(version);
+    pub fn type_version(mut self, version: &str) -> ProofRequestBuilder {
+        self.type_version = self.wrap_ok(version.to_string());
         self
     }
 
-    pub fn tid(&mut self, tid: u32) -> &mut Self {
-        self.topic.tid = tid;
+    pub fn tid(mut self, tid: u32) -> ProofRequestBuilder {
+        self.tid = self.wrap_ok(tid);
         self
     }
 
-    pub fn mid(&mut self, mid: u32) -> &mut Self {
-        self.topic.mid = mid;
+    pub fn mid(mut self, mid: u32) -> ProofRequestBuilder {
+        self.mid = self.wrap_ok(mid);
         self
     }
 
-    pub fn nonce(&mut self, nonce: &str) -> &mut Self {
-        match validation::validate_nonce(nonce) {
-            Ok(x) => {
-                self.proof_request_data.nonce = x;
-                self
-            },
-            Err(x) => {
-                self.validate_rc = x;
-                self
-            },
-        }
-    }
-
-    pub fn proof_name(&mut self, name: &str) -> &mut Self {
-        self.proof_request_data.name = String::from(name);
+    pub fn nonce(mut self, nonce: &str) -> ProofRequestBuilder {
+        self.nonce = Some(validation::validate_nonce(nonce));
         self
     }
 
-    pub fn proof_data_version(&mut self, version: &str) -> &mut Self {
-        self.proof_request_data.data_version = String::from(version);
+    pub fn proof_name(mut self, name: &str) -> ProofRequestBuilder {
+        self.name = self.wrap_ok(name.to_string());
         self
     }
 
+    pub fn proof_data_version(mut self, version: &str) -> ProofRequestBuilder {
+        self.data_version = self.wrap_ok(version.to_string());
+        self
+    }
 
-    pub fn requested_attrs(&mut self, attrs: &str) -> &mut Self {
+    pub fn requested_attrs(mut self, attrs: &str) -> ProofRequestBuilder {
         let mut check_req_attrs: HashMap<String, AttrInfo> = HashMap::new();
         let proof_attrs:Vec<AttrInfo> = match serde_json::from_str(attrs) {
             Ok(a) => a,
             Err(e) => {
                 debug!("Cannot parse attributes: {}", e);
-                self.validate_rc = error::INVALID_JSON.code_num;
+                self.requested_attributes = self.wrap_err(error::INVALID_JSON.code_num);
                 return self
             }
         };
 
-        let mut index = 1;
-        for attr in proof_attrs {
+        for (index, attr) in proof_attrs.iter().enumerate() {
             if check_req_attrs.contains_key(&attr.name) {
-                check_req_attrs.insert(format!("{}_{}", attr.name, index), attr);
+                check_req_attrs.insert(format!("{}_{}", attr.name, index), attr.clone());
             } else {
-                check_req_attrs.insert(attr.name.clone(), attr);
+                check_req_attrs.insert(attr.name.clone(), attr.clone());
             }
-            index= index + 1;
         }
-        self.proof_request_data.requested_attributes = check_req_attrs;
+        self.requested_attributes = self.wrap_ok(check_req_attrs);
         self
     }
 
-    pub fn requested_predicates(&mut self, predicates: &str) -> &mut Self {
+    pub fn requested_predicates(mut self, predicates: &str) -> ProofRequestBuilder {
         let mut check_predicates: HashMap<String, PredicateInfo> = HashMap::new();
         let attr_values: Vec<PredicateInfo> = match serde_json::from_str(predicates) {
             Ok(a) => a,
             Err(e) => {
                 debug!("Cannot parse predicates: {}", e);
-                self.validate_rc = error::INVALID_JSON.code_num;
+                self.requested_predicates = self.wrap_err(error::INVALID_JSON.code_num);
                 return self
             },
         };
 
-        let mut index = 1;
-        for attr in attr_values {
+        for (index, attr) in attr_values.iter().enumerate() {
             if check_predicates.contains_key(&attr.name) {
-                check_predicates.insert(format!("{}_{}", attr.name, index), attr);
+                check_predicates.insert(format!("{}_{}", attr.name, index), attr.clone());
             } else {
-                check_predicates.insert(attr.name.clone(), attr);
+                check_predicates.insert(attr.name.clone(), attr.clone());
             }
-            index = index + 1;
         }
 
-        self.proof_request_data.requested_predicates = check_predicates;
+        self.requested_predicates = self.wrap_ok(check_predicates);
         self
     }
 
-    pub fn serialize_message(&mut self) -> Result<String, u32> {
-        if self.validate_rc != error::SUCCESS.code_num {
-            return Err(self.validate_rc)
-        }
-
-        match serde_json::to_string(self) {
-            Ok(x) => Ok(x),
-            Err(_) => Err(error::INVALID_JSON.code_num)
-        }
+    pub fn build(self) -> Result<ProofRequestMessage, u32> {
+        Ok(ProofRequestMessage {
+            type_header: ProofType {
+                name: String::from(PROOF_REQUEST),
+                type_version: self.mandatory_field(self.type_version.clone())?
+            },
+            topic: ProofTopic {
+                tid: self.mandatory_field(self.tid.clone())?,
+                mid: self.mandatory_field(self.mid.clone())?,
+            },
+            proof_request_data: ProofRequestData {
+                nonce: self.mandatory_field(self.nonce.clone())?,
+                name: self.mandatory_field(self.name.clone())?,
+                data_version: self.mandatory_field(self.data_version.clone())?,
+                requested_attributes: self.mandatory_field(self.requested_attributes.clone())?,
+                requested_predicates: self.mandatory_field(self.requested_predicates.clone())?
+            },
+            msg_ref_id: None
+        })
     }
+}
 
-    pub fn get_proof_request_data(&self) -> String {
-        json!(self)[PROOF_DATA].to_string()
-    }
-
-    pub fn to_string(&self) -> Result<String, u32> {
-        match serde_json::to_string(&self){
-            Ok(s) => Ok(s),
-            Err(_) => Err(error::INVALID_JSON.code_num),
+impl fmt::Display for ProofRequestMessage {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match serde_json::to_string(&self) {
+            Ok(x) => {
+                write!(f, "{}", x)
+            },
+            Err(e) => {
+                error!("{}: {:?}", error::INVALID_PROOF_REQ.message, e);
+                write!(f, "null")
+            }
         }
     }
 }
 
+impl ProofRequestMessage {
+    pub fn get_proof_request_data(&self) -> String { json!(self)[PROOF_DATA].to_string() }
+
+    pub fn serialize_message(&self) -> String { self.to_string() }
+}
+
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
-    use messages::{proof_request};
     use utils::constants::{REQUESTED_ATTRS, REQUESTED_PREDICATES};
 
-    #[test]
-    fn test_create_proof_request_data() {
-        let request = proof_request();
-        let proof_data = ProofRequestData {
-            nonce: String::new(),
-            name: String::new(),
-            data_version: String::new(),
-            requested_attributes: HashMap::new(),
-            requested_predicates: HashMap::new(),
-        };
-        assert_eq!(request.proof_request_data, proof_data);
-    }
-
-    #[test]
-    fn test_proof_request_msg() {
+    pub fn populated_proof_req_builder() -> ProofRequestBuilder {
         //proof data
         let data_name = "Test";
         let nonce = "123432421212";
@@ -250,7 +239,7 @@ mod tests {
         let tid = 89;
         let mid = 98;
 
-        let mut request = proof_request()
+        ProofRequestBuilder::new()
             .type_version(version)
             .tid(tid)
             .mid(mid)
@@ -259,9 +248,37 @@ mod tests {
             .proof_data_version(data_version)
             .requested_attrs(REQUESTED_ATTRS)
             .requested_predicates(REQUESTED_PREDICATES)
-            .clone();
+    }
 
-        let serialized_msg = request.serialize_message().unwrap();
+    #[test]
+    fn test_builder_sets_attrs_correctly() {
+        let req_builder = ProofRequestBuilder::new()
+            .type_version("123");
+        assert_eq!(req_builder.type_version.unwrap().unwrap(), "123".to_string());
+
+    }
+
+    #[test]
+    fn test_mandatory_field() {
+        let rc = ProofRequestBuilder::new()
+            .build();
+        assert_eq!(rc, Err(error::MISSING_MSG_FIELD.code_num));
+
+        let rc = ProofRequestBuilder::new()
+            .type_version("123")
+            .requested_attrs("{}")
+            .build();
+
+        assert!(rc.is_err());
+    }
+
+    #[test]
+    fn test_proof_request_msg() {
+        let serialized_msg =  populated_proof_req_builder()
+            .build()
+            .unwrap()
+            .serialize_message();
+
         println!("{}", serialized_msg);
         assert!(serialized_msg.contains(r#""@type":{"name":"PROOF_REQUEST","version":"1.3"}"#));
         assert!(serialized_msg.contains(r#"@topic":{"mid":98,"tid":89}"#));
@@ -279,8 +296,7 @@ mod tests {
         check_req_attrs.insert("age".to_string(), attr_info1);
         check_req_attrs.insert("name".to_string(), attr_info2);
 
-        let request = proof_request().requested_attrs(REQUESTED_ATTRS).clone();
-        assert_eq!(request.proof_request_data.requested_attributes, check_req_attrs);
+        assert_eq!(populated_proof_req_builder().requested_attributes, Some(Ok(check_req_attrs)));
     }
 
     #[test]
@@ -289,8 +305,7 @@ mod tests {
         let attr_info1: PredicateInfo = serde_json::from_str(r#"{ "name":"age","p_type":"GE","p_value":22, "restrictions":[ { "schema_id": "6XFh8yBzrpJQmNyZzgoTqB:2:schema_name:0.0.11", "schema_name":"Faber Student Info", "schema_version":"1.0", "schema_issuer_did":"6XFh8yBzrpJQmNyZzgoTqB", "issuer_did":"8XFh8yBzrpJQmNyZzgoTqB", "cred_def_id": "8XFh8yBzrpJQmNyZzgoTqB:3:CL:1766" }, { "schema_id": "5XFh8yBzrpJQmNyZzgoTqB:2:schema_name:0.0.11", "schema_name":"BYU Student Info", "schema_version":"1.0", "schema_issuer_did":"5XFh8yBzrpJQmNyZzgoTqB", "issuer_did":"66Fh8yBzrpJQmNyZzgoTqB", "cred_def_id": "66Fh8yBzrpJQmNyZzgoTqB:3:CL:1766" } ] }"#).unwrap();
         check_predicates.insert("age".to_string(), attr_info1);
 
-        let request = proof_request().requested_predicates(REQUESTED_PREDICATES).clone();
-        assert_eq!(request.proof_request_data.requested_predicates, check_predicates);
+        assert_eq!(populated_proof_req_builder().requested_predicates, Some(Ok(check_predicates)));
     }
 
     #[test]

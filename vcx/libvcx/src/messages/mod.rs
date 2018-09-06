@@ -28,7 +28,7 @@ use self::send_message::SendMessage;
 use serde::Deserialize;
 use self::rmp_serde::Deserializer;
 use serde_json::Value;
-use self::proofs::proof_request::{ProofRequestMessage};
+use self::proofs::proof_request::{ProofRequestBuilder};
 
 #[derive(Clone, Deserialize, Serialize, Debug, PartialEq, PartialOrd)]
 pub struct MsgInfo {
@@ -320,6 +320,16 @@ pub trait GeneralMessage{
     fn msgpack(&mut self) -> Result<Vec<u8>, u32>;
 }
 
+pub trait MsgUtils {
+    fn mandatory_field<T>(&self, field: Option<Result<T, u32>>) -> Result<T, u32> {
+        field.ok_or(error::MISSING_MSG_FIELD.code_num)?
+    }
+
+    fn wrap_ok<T>(&self, field: T) -> Option<Result<T, u32>>  { Some(Ok(field)) }
+
+    fn wrap_err<T>(&self, err: u32) -> Option<Result<T, u32>> { Some(Err(err))}
+}
+
 pub fn create_keys() -> CreateKeyMsg { CreateKeyMsg::create() }
 pub fn send_invite() -> SendInvite { SendInvite::create() }
 pub fn delete_connection() -> DeleteConnection { DeleteConnection::create() }
@@ -327,7 +337,7 @@ pub fn accept_invite() -> AcceptInvite { AcceptInvite::create() }
 pub fn update_data() -> UpdateProfileData{ UpdateProfileData::create() }
 pub fn get_messages() -> GetMessages { GetMessages::create() }
 pub fn send_message() -> SendMessage { SendMessage::create() }
-pub fn proof_request() -> ProofRequestMessage { ProofRequestMessage::create() }
+pub fn proof_request() -> ProofRequestBuilder { ProofRequestBuilder::new() }
 
 #[cfg(test)]
 pub mod tests {

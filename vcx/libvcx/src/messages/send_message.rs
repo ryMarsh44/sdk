@@ -51,6 +51,103 @@ pub struct MessageDetailPayload {
     detail: Option<String>,
 }
 
+pub struct SendMessageBuilder {
+    message: Option<Result<String, u32>>,
+    to_did: Option<Result<String, u32>>,
+    to_vk: Option<Result<String, u32>>,
+    agent_did:  Option<Result<String, u32>>,
+    agent_vk:  Option<Result<String, u32>>,
+    agent_payload:  Option<Result<String, u32>>,
+    payload:  Option<Result<Vec<u8>, u32>>,
+    ref_msg_id: Option<Result<String, u32>>,
+    status_code: Option<Result<String, u32>>,
+    uid: Option<Result<String, u32>>,
+    title: Option<Result<String, u32>>,
+    detail: Option<Result<String, u32>>,
+}
+
+impl SendMessageBuilder{
+
+    pub fn new() -> SendMessageBuilder {
+        SendMessageBuilder {
+            message: Option<Result<String, u32>>,
+            to_did: Option<Result<String, u32>>,
+            to_vk: Option<Result<String, u32>>,
+            agent_did:  Option<Result<String, u32>>,
+            agent_vk:  Option<Result<String, u32>>,
+            agent_payload:  Option<Result<String, u32>>,
+            payload:  Option<Result<Vec<u8>, u32>>,
+            ref_msg_id: Option<Result<String, u32>>,
+            status_code: Option<Result<String, u32>>,
+            uid: Option<Result<String, u32>>,
+            title: Option<Result<String, u32>>,
+            detail: Option<Result<String, u32>>,
+        }
+    }
+
+    pub fn msg_type(&mut self, msg: &str) -> &mut Self{
+        //Todo: validate msg??
+        self.message = msg.to_string();
+        self
+    }
+
+    pub fn uid(&mut self, uid: &str) -> &mut Self{
+        //Todo: validate msg_uid??
+        self.uid = uid.to_string();
+        self
+    }
+
+    pub fn status_code(&mut self, code: &str) -> &mut Self {
+        //Todo: validate that it can be parsed to number??
+        self.status_code = code.to_string();
+        self
+    }
+
+
+    pub fn edge_agent_payload(&mut self, payload: &Vec<u8>) -> &mut Self {
+        //todo: is this a json value, String??
+        self.payload = payload.clone();
+        self
+    }
+
+    pub fn ref_msg_id(&mut self, id: &str) -> &mut Self {
+        self.ref_msg_id = Some(String::from(id));
+        self
+    }
+
+    pub fn send_secure(&mut self) -> Result<Vec<String>, u32> {
+        let data = match self.msgpack() {
+            Ok(x) => x,
+            Err(x) => return Err(x),
+        };
+
+        let mut result = Vec::new();
+        debug!("sending secure message to agency");
+        if settings::test_agency_mode_enabled() {
+            result.push(parse_send_message_response(::utils::constants::SEND_MESSAGE_RESPONSE.to_vec())?);
+            return Ok(result.to_owned());
+        }
+
+        match httpclient::post_u8(&data) {
+            Err(_) => return Err(error::POST_MSG_FAILURE.code_num),
+            Ok(response) => result.push(parse_send_message_response(response)?),
+        };
+        debug!("sent message to agency");
+        Ok(result.to_owned())
+    }
+
+    pub fn set_title(&mut self, title: &str) -> &mut Self {
+        self.title = Some(title.to_string());
+        self
+    }
+
+    pub fn set_detail(&mut self, detail: &str) -> &mut Self {
+        self.detail = Some(detail.to_string());
+        self
+    }
+}
+
+
 impl SendMessage{
 
     pub fn create() -> SendMessage {
