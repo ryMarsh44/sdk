@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use messages::proofs::proof_message::{ProofMessage};
 use messages;
 use messages::proofs::proof_request::{ ProofRequestMessage };
-use messages::GeneralMessage;
+use messages::{ GeneralMessage, GeneralMessageBuilder };
 use utils::error;
 use utils::constants::*;
 use utils::libindy::anoncreds::libindy_verifier_verify_proof;
@@ -215,7 +215,8 @@ impl Proof {
         let title = format!("{} wants you to share {}", settings::get_config_value(settings::CONFIG_INSTITUTION_NAME).unwrap(), self.name);
         self.proof_request = Some(proof_request);
 
-        match messages::send_message().to(&self.prover_did)
+        match messages::send_message()
+            .to(&self.prover_did)
             .to_vk(&self.prover_vk)
             .msg_type("proofReq")
             .agent_did(&self.agent_did)
@@ -223,6 +224,7 @@ impl Proof {
             .set_detail(&title)
             .agent_vk(&self.agent_vk)
             .edge_agent_payload(&data)
+            .build().map_err(|e| ProofError::CommonError(e))?
             .send_secure() {
             Ok(response) => {
                 self.msg_uid = get_proof_details(&response[0])?;

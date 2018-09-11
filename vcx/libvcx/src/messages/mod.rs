@@ -24,7 +24,7 @@ use self::update_connection::DeleteConnection;
 use self::invite::{AcceptInvite, SendInvite};
 use self::update_profile::UpdateProfileData;
 use self::get_message::GetMessages;
-use self::send_message::SendMessage;
+use self::send_message::SendMessageBuilder;
 use serde::Deserialize;
 use self::rmp_serde::Deserializer;
 use serde_json::Value;
@@ -251,6 +251,23 @@ pub struct Forward {
     msg: Vec<u8>,
 }
 
+pub trait GeneralMessageBuilder {
+    type MsgBuilder;
+    type Msg;
+
+    //todo: deserialize_message
+
+    fn to(mut self, did: &str) -> Self::MsgBuilder;
+    fn to_vk(mut self, vk: &str) -> Self::MsgBuilder;
+    fn agent_did(mut self, did: &str) -> Self::MsgBuilder;
+    fn agent_vk(mut self, vk: &str) -> Self::MsgBuilder;
+    fn build(self) -> Result<Self::Msg, u32>;
+}
+
+pub trait GeneralMessage2 {
+    fn msgpack(&mut self) -> Result<Vec<u8>, u32>;
+}
+
 pub trait GeneralMessage{
     type Msg;
 
@@ -325,6 +342,12 @@ pub trait MsgUtils {
         field.ok_or(error::MISSING_MSG_FIELD.code_num)?
     }
 
+    fn optional_field<T>(&self, field: Option<Result<T, u32>>) -> Result<Option<T>, u32> {
+        field.map_or(Ok(None), |rc| {
+            rc.map(|x| Some(x))
+        })
+    }
+
     fn wrap_ok<T>(&self, field: T) -> Option<Result<T, u32>>  { Some(Ok(field)) }
 
     fn wrap_err<T>(&self, err: u32) -> Option<Result<T, u32>> { Some(Err(err))}
@@ -336,7 +359,7 @@ pub fn delete_connection() -> DeleteConnection { DeleteConnection::create() }
 pub fn accept_invite() -> AcceptInvite { AcceptInvite::create() }
 pub fn update_data() -> UpdateProfileData{ UpdateProfileData::create() }
 pub fn get_messages() -> GetMessages { GetMessages::create() }
-pub fn send_message() -> SendMessage { SendMessage::create() }
+pub fn send_message() -> SendMessageBuilder { SendMessageBuilder::new() }
 pub fn proof_request() -> ProofRequestBuilder { ProofRequestBuilder::new() }
 
 #[cfg(test)]

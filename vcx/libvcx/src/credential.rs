@@ -13,7 +13,7 @@ use credential_request::{ CredentialRequest };
 
 use messages;
 use messages::to_u8;
-use messages::GeneralMessage;
+use messages::{ GeneralMessage, GeneralMessageBuilder };
 use messages::send_message::parse_msg_uid;
 use messages::extract_json_payload;
 
@@ -150,13 +150,15 @@ impl Credential {
             self.payment_txn = Some(payment_txn);
         }
         
-        match messages::send_message().to(local_my_did)
+        match messages::send_message()
+            .to(local_my_did)
             .to_vk(local_my_vk)
             .msg_type("credReq")
             .agent_did(local_agent_did)
             .agent_vk(local_agent_vk)
             .edge_agent_payload(&data)
             .ref_msg_id(offer_msg_id)
+            .build().map_err(|e| CredentialError::CommonError(e))?
             .send_secure() {
             Ok(response) => {
                 self.msg_uid = Some(parse_msg_uid(&response[0]).map_err(|ec| CredentialError::CommonError(ec))?);

@@ -6,7 +6,7 @@ use api::VcxStateType;
 use utils::error;
 use connection;
 use messages;
-use messages::GeneralMessage;
+use messages::{ GeneralMessage, GeneralMessageBuilder };
 use messages::proofs::proof_message::{ProofMessage };
 use messages::proofs::proof_request::{ ProofRequestMessage };
 use messages::extract_json_payload;
@@ -277,13 +277,15 @@ impl DisclosedProof {
         let data: Vec<u8> = connection::generate_encrypted_payload(local_my_vk, local_their_vk, &proof, "PROOF")
             .or(Err(ProofError::ProofConnectionError()))?;
 
-        match messages::send_message().to(local_my_did)
+        match messages::send_message()
+            .to(local_my_did)
             .to_vk(local_my_vk)
             .msg_type("proof")
             .agent_did(local_agent_did)
             .agent_vk(local_agent_vk)
             .edge_agent_payload(&data)
             .ref_msg_id(ref_msg_uid)
+            .build().map_err(|e| ProofError::CommonError(e))?
             .send_secure() {
             Ok(response) => {
                 self.state = VcxStateType::VcxStateAccepted;

@@ -10,18 +10,27 @@ use serde::Deserialize;
 use self::rmp_serde::Deserializer;
 use messages::*;
 
+/*
+pub struct SendMessage {
+message: Option<String>,
+agent_payload: Option<String>,
+status_code: Option<String>,
+uid: Option<String>,
+title: Option<String>,
+detail: Option<String>,
+}
+*/
 pub struct SendMessage {
     message: String,
     to_did: String,
     to_vk: String,
     agent_did:  String,
     agent_vk: String,
-    agent_payload: String,
     payload: Vec<u8>,
-    validate_rc: u32,
+    uid: Option<String>,
+    agent_payload: Option<String>,
     ref_msg_id: Option<String>,
-    status_code: String,
-    uid: String,
+    status_code: Option<String>,
     title: Option<String>,
     detail: Option<String>,
 }
@@ -66,184 +75,107 @@ pub struct SendMessageBuilder {
     detail: Option<Result<String, u32>>,
 }
 
+impl MsgUtils for SendMessageBuilder {}
+impl GeneralMessageBuilder for SendMessageBuilder {
+    type MsgBuilder = SendMessageBuilder;
+    type Msg = SendMessage;
+
+    fn to(mut self, did: &str) -> SendMessageBuilder {
+        self.to_did = Some(validation::validate_did(did));
+        self
+    }
+
+    fn to_vk(mut self, vk: &str) -> SendMessageBuilder {
+        self.to_vk = Some(validation::validate_verkey(vk));
+        self
+    }
+
+    fn agent_did(mut self, did: &str) -> SendMessageBuilder {
+        self.agent_did = Some(validation::validate_did(did));
+        self
+    }
+
+    fn agent_vk(mut self, vk: &str) -> SendMessageBuilder {
+        self.agent_vk = Some(validation::validate_verkey(vk));
+        self
+    }
+    fn build(self) -> Result<SendMessage, u32> {
+        Ok(SendMessage {
+            message: self.mandatory_field(self.message.clone())?,
+            to_did: self.mandatory_field(self.to_did.clone())?,
+            to_vk: self.mandatory_field(self.to_vk.clone())?,
+            agent_did: self.mandatory_field(self.agent_did.clone())?,
+            agent_vk: self.mandatory_field(self.agent_vk.clone())?,
+            payload: self.mandatory_field(self.payload.clone())?,
+            agent_payload: self.optional_field(self.agent_payload.clone())?,
+            ref_msg_id: self.optional_field(self.ref_msg_id.clone())?,
+            status_code: self.optional_field(self.status_code.clone())?,
+            uid: self.optional_field(self.uid.clone())?,
+            title: self.optional_field(self.title.clone())?,
+            detail: self.optional_field(self.detail.clone())?,
+        })
+    }
+}
+
 impl SendMessageBuilder{
 
     pub fn new() -> SendMessageBuilder {
         SendMessageBuilder {
-            message: Option<Result<String, u32>>,
-            to_did: Option<Result<String, u32>>,
-            to_vk: Option<Result<String, u32>>,
-            agent_did:  Option<Result<String, u32>>,
-            agent_vk:  Option<Result<String, u32>>,
-            agent_payload:  Option<Result<String, u32>>,
-            payload:  Option<Result<Vec<u8>, u32>>,
-            ref_msg_id: Option<Result<String, u32>>,
-            status_code: Option<Result<String, u32>>,
-            uid: Option<Result<String, u32>>,
-            title: Option<Result<String, u32>>,
-            detail: Option<Result<String, u32>>,
-        }
-    }
-
-    pub fn msg_type(&mut self, msg: &str) -> &mut Self{
-        //Todo: validate msg??
-        self.message = msg.to_string();
-        self
-    }
-
-    pub fn uid(&mut self, uid: &str) -> &mut Self{
-        //Todo: validate msg_uid??
-        self.uid = uid.to_string();
-        self
-    }
-
-    pub fn status_code(&mut self, code: &str) -> &mut Self {
-        //Todo: validate that it can be parsed to number??
-        self.status_code = code.to_string();
-        self
-    }
-
-
-    pub fn edge_agent_payload(&mut self, payload: &Vec<u8>) -> &mut Self {
-        //todo: is this a json value, String??
-        self.payload = payload.clone();
-        self
-    }
-
-    pub fn ref_msg_id(&mut self, id: &str) -> &mut Self {
-        self.ref_msg_id = Some(String::from(id));
-        self
-    }
-
-    pub fn send_secure(&mut self) -> Result<Vec<String>, u32> {
-        let data = match self.msgpack() {
-            Ok(x) => x,
-            Err(x) => return Err(x),
-        };
-
-        let mut result = Vec::new();
-        debug!("sending secure message to agency");
-        if settings::test_agency_mode_enabled() {
-            result.push(parse_send_message_response(::utils::constants::SEND_MESSAGE_RESPONSE.to_vec())?);
-            return Ok(result.to_owned());
-        }
-
-        match httpclient::post_u8(&data) {
-            Err(_) => return Err(error::POST_MSG_FAILURE.code_num),
-            Ok(response) => result.push(parse_send_message_response(response)?),
-        };
-        debug!("sent message to agency");
-        Ok(result.to_owned())
-    }
-
-    pub fn set_title(&mut self, title: &str) -> &mut Self {
-        self.title = Some(title.to_string());
-        self
-    }
-
-    pub fn set_detail(&mut self, detail: &str) -> &mut Self {
-        self.detail = Some(detail.to_string());
-        self
-    }
-}
-
-
-impl SendMessage{
-
-    pub fn create() -> SendMessage {
-        SendMessage {
-            message: String::new(),
-            to_did: String::new(),
-            to_vk: String::new(),
-            agent_did: String::new(),
-            agent_vk: String::new(),
-            agent_payload: String::new(),
-            payload: Vec::new(),
-            validate_rc: error::SUCCESS.code_num,
+            message: None,
+            to_did: None,
+            to_vk: None,
+            agent_did:  None,
+            agent_vk:  None,
+            agent_payload:  None,
+            payload:  None,
             ref_msg_id: None,
-            status_code: String::new(),
-            uid: String::new(),
+            status_code: None,
+            uid: None,
             title: None,
             detail: None,
         }
     }
 
-    pub fn msg_type(&mut self, msg: &str) -> &mut Self{
-        //Todo: validate msg??
-        self.message = msg.to_string();
+    pub fn msg_type(mut self, msg: &str) -> SendMessageBuilder{
+        self.message = self.wrap_ok(msg.to_string());
         self
     }
 
-    pub fn uid(&mut self, uid: &str) -> &mut Self{
-        //Todo: validate msg_uid??
-        self.uid = uid.to_string();
+    pub fn uid(mut self, uid: &str) -> SendMessageBuilder{
+        self.uid = self.wrap_ok(uid.to_string());
         self
     }
 
-    pub fn status_code(&mut self, code: &str) -> &mut Self {
-        //Todo: validate that it can be parsed to number??
-        self.status_code = code.to_string();
+    pub fn status_code(mut self, code: &str) -> SendMessageBuilder {
+        self.status_code = self.wrap_ok(code.to_string());
         self
     }
 
 
-    pub fn edge_agent_payload(&mut self, payload: &Vec<u8>) -> &mut Self {
-        //todo: is this a json value, String??
-        self.payload = payload.clone();
+    pub fn edge_agent_payload(mut self, payload: &Vec<u8>) -> SendMessageBuilder {
+        self.payload = self.wrap_ok(payload.clone());
         self
     }
 
-    pub fn ref_msg_id(&mut self, id: &str) -> &mut Self {
-        self.ref_msg_id = Some(String::from(id));
+    pub fn ref_msg_id(mut self, id: &str) -> SendMessageBuilder {
+        self.ref_msg_id = self.wrap_ok(id.to_string());
         self
     }
 
-    pub fn send_secure(&mut self) -> Result<Vec<String>, u32> {
-        let data = match self.msgpack() {
-            Ok(x) => x,
-            Err(x) => return Err(x),
-        };
 
-        let mut result = Vec::new();
-        debug!("sending secure message to agency");
-        if settings::test_agency_mode_enabled() {
-            result.push(parse_send_message_response(::utils::constants::SEND_MESSAGE_RESPONSE.to_vec())?);
-            return Ok(result.to_owned());
-        }
-
-        match httpclient::post_u8(&data) {
-            Err(_) => return Err(error::POST_MSG_FAILURE.code_num),
-            Ok(response) => result.push(parse_send_message_response(response)?),
-        };
-        debug!("sent message to agency");
-        Ok(result.to_owned())
-    }
-
-    pub fn set_title(&mut self, title: &str) -> &mut Self {
-        self.title = Some(title.to_string());
+    pub fn set_title(mut self, title: &str) -> SendMessageBuilder {
+        self.title = self.wrap_ok(title.to_string());
         self
     }
 
-    pub fn set_detail(&mut self, detail: &str) -> &mut Self {
-        self.detail = Some(detail.to_string());
+    pub fn set_detail(mut self, detail: &str) -> SendMessageBuilder {
+        self.detail = self.wrap_ok(detail.to_string());
         self
     }
 }
 
-//Todo: Every GeneralMessage extension, duplicates code
-impl GeneralMessage for SendMessage{
-    type Msg = SendMessage;
-
-    fn set_agent_did(&mut self, did: String) { self.agent_did = did; }
-    fn set_agent_vk(&mut self, vk: String) { self.agent_vk = vk; }
-    fn set_to_did(&mut self, to_did: String){ self.to_did = to_did; }
-    fn set_validate_rc(&mut self, rc: u32){ self.validate_rc = rc; }
-    fn set_to_vk(&mut self, to_vk: String){ self.to_vk = to_vk; }
-
+impl GeneralMessage2 for SendMessage {
     fn msgpack(&mut self) -> Result<Vec<u8>, u32> {
-        if self.validate_rc != error::SUCCESS.code_num {
-            return Err(self.validate_rc)
-        }
 
         let create = CreateMessagePayload { msg_type: MsgType { name: "CREATE_MSG".to_string(), ver: "1.0".to_string(), }, mtype: self.message.to_string(), reply_to_msg_id: self.ref_msg_id.clone(), send_msg: true};
         let detail = MessageDetailPayload { msg_type: MsgType { name: "MSG_DETAIL".to_string(), ver: "1.0".to_string(), }, msg: self.payload.clone(), title: self.title.clone(), detail: self.detail.clone(), };
@@ -262,6 +194,29 @@ impl GeneralMessage for SendMessage{
 
         let msg = bundle.encode()?;
         bundle_for_agent(msg, &self.to_vk, &self.agent_did, &self.agent_vk)
+    }
+}
+
+impl SendMessage{
+    pub fn send_secure(&mut self) -> Result<Vec<String>, u32> {
+        let data = match self.msgpack() {
+            Ok(x) => x,
+            Err(x) => return Err(x),
+        };
+
+        let mut result = Vec::new();
+        debug!("sending secure message to agency");
+        if settings::test_agency_mode_enabled() {
+            result.push(parse_send_message_response(::utils::constants::SEND_MESSAGE_RESPONSE.to_vec())?);
+            return Ok(result.to_owned());
+        }
+
+        match httpclient::post_u8(&data) {
+            Err(_) => return Err(error::POST_MSG_FAILURE.code_num),
+            Ok(response) => result.push(parse_send_message_response(response)?),
+        };
+        debug!("sent message to agency");
+        Ok(result.to_owned())
     }
 }
 
@@ -324,26 +279,30 @@ mod tests {
     use super::*;
     use utils::constants::SEND_MESSAGE_RESPONSE;
 
+    fn populated_send_msg_builder() -> SendMessageBuilder {
+        let local_my_did = "8XFh8yBzrpJQmNyZzgoTqB";
+        let local_my_vk = "EkVTa7SCJ5SntpYyX7CSb2pcBhiVGT9kWSagA8a9T69A";
+        let msg_type = "";
+        let agent_did = "8XFh8yBzrpJQmNyZzgoTzz";
+        let agent_vk = "BBBBa7SCJ5SntpYyX7CSb2pcBhiVGT9kWSagA8a9T69A";
+        let data = vec![1,2,3,4,5,6,7,8];
+        let ref_msg_id = "123";
+        SendMessageBuilder::new()
+            .to(local_my_did)
+            .to_vk(local_my_vk)
+            .msg_type(msg_type)
+            .agent_did(agent_did)
+            .agent_vk(agent_vk)
+            .edge_agent_payload(&data)
+            .ref_msg_id(ref_msg_id)
+    }
+
     #[test]
     fn test_msgpack() {
         settings::set_defaults();
         settings::set_config_value(settings::CONFIG_ENABLE_TEST_MODE, "true");
+        let mut message = populated_send_msg_builder().build().unwrap();
 
-        let mut message = SendMessage {
-            message: "credOffer".to_string(),
-            to_did: "8XFh8yBzrpJQmNyZzgoTqB".to_string(),
-            to_vk: "EkVTa7SCJ5SntpYyX7CSb2pcBhiVGT9kWSagA8a9T69A".to_string(),
-            agent_did: "8XFh8yBzrpJQmNyZzgoTqB".to_string(),
-            agent_vk: "EkVTa7SCJ5SntpYyX7CSb2pcBhiVGT9kWSagA8a9T69A".to_string(),
-            agent_payload: String::new(),
-            payload: vec![1,2,3,4,5,6,7,8],
-            validate_rc: 0,
-            ref_msg_id: Some("123".to_string()),
-            status_code: "123".to_string(),
-            uid: "123".to_string(),
-            title: Some("this is the title".to_string()),
-            detail: Some("this is the detail".to_string()),
-        };
 
         /* just check that it doesn't panic */
         let packed = message.msgpack().unwrap();
@@ -358,6 +317,7 @@ mod tests {
         assert_eq!("{\"@type\":{\"name\":\"MSG_SENT\",\"ver\":\"1.0\"},\"uids\":[\"ntc2ytb\"]}", result);
     }
 
+    /*
     #[test]
     fn test_parse_send_message_bad_response() {
         settings::set_defaults();
@@ -393,5 +353,5 @@ mod tests {
         let to_str = serde_json::to_string(&test_json).unwrap();
         let uid = parse_msg_uid(&to_str).unwrap_err();
         assert_eq!(error::INVALID_JSON.code_num, uid);
-    }
+    }*/
 }

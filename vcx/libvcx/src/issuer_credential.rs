@@ -5,7 +5,7 @@ extern crate libc;
 use api::VcxStateType;
 use messages;
 use settings;
-use messages::{ GeneralMessage, MessageResponseCode::MessageAccepted, send_message::parse_msg_uid };
+use messages::{ GeneralMessage, GeneralMessageBuilder, MessageResponseCode::MessageAccepted, send_message::parse_msg_uid };
 use connection;
 use credential_request::{ CredentialRequest };
 use utils::{error,
@@ -137,13 +137,15 @@ impl IssuerCredential {
         let data = connection::generate_encrypted_payload(&self.issued_vk, &self.remote_vk, &payload, "CRED_OFFER")
             .map_err(|e| IssuerCredError::CommonError(e.to_error_code()))?;
 
-        match messages::send_message().to(&self.issued_did)
+        match messages::send_message()
+            .to(&self.issued_did)
             .to_vk(&self.issued_vk)
             .msg_type("credOffer")
             .edge_agent_payload(&data)
             .agent_did(&self.agent_did)
             .agent_vk(&self.agent_vk)
             .status_code(&MessageAccepted.as_string())
+            .build().map_err(|e| IssuerCredError::CommonError(e))?
             .send_secure() {
             Err(x) => {
                 warn!("could not send credentialOffer: {}", x);
@@ -187,7 +189,8 @@ impl IssuerCredential {
         let data = connection::generate_encrypted_payload(&self.issued_vk, &self.remote_vk, &data, "CRED")
             .map_err(|e| IssuerCredError::CommonError(e.to_error_code()))?;
 
-        match messages::send_message().to(&self.issued_did)
+        match messages::send_message()
+            .to(&self.issued_did)
             .to_vk(&self.issued_vk)
             .msg_type("cred")
             .status_code(&MessageAccepted.as_string())
@@ -195,6 +198,7 @@ impl IssuerCredential {
             .agent_did(&self.agent_did)
             .agent_vk(&self.agent_vk)
             .ref_msg_id(cred_req_msg_id)
+            .build().map_err(|e| IssuerCredError::CommonError(e))?
             .send_secure() {
             Err(x) => {
                 warn!("could not send credential: {}", x);
