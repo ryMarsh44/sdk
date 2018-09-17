@@ -77,7 +77,6 @@ pub struct ProofRequestMessage{
     pub msg_ref_id: Option<String>,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub struct ProofRequestBuilder {
     tid: Option<Result<u32, u32>>,
     mid: Option<Result<u32, u32>>,
@@ -182,21 +181,22 @@ impl ProofRequestBuilder {
     }
 
     pub fn build(self) -> Result<ProofRequestMessage, u32> {
+        let missing_field = error::MISSING_MSG_FIELD.code_num;
         Ok(ProofRequestMessage {
             type_header: ProofType {
                 name: String::from(PROOF_REQUEST),
-                type_version: self.mandatory_field(self.type_version.clone())?
+                type_version: self.type_version.ok_or(missing_field)??,
             },
             topic: ProofTopic {
-                tid: self.mandatory_field(self.tid.clone())?,
-                mid: self.mandatory_field(self.mid.clone())?,
+                tid: self.tid.ok_or(missing_field)??,
+                mid: self.mid.ok_or(missing_field)??,
             },
             proof_request_data: ProofRequestData {
-                nonce: self.mandatory_field(self.nonce.clone())?,
-                name: self.mandatory_field(self.name.clone())?,
-                data_version: self.mandatory_field(self.data_version.clone())?,
-                requested_attributes: self.mandatory_field(self.requested_attributes.clone())?,
-                requested_predicates: self.mandatory_field(self.requested_predicates.clone())?
+                nonce: self.nonce.ok_or(missing_field)??,
+                name: self.name.ok_or(missing_field)??,
+                data_version: self.data_version.ok_or(missing_field)??,
+                requested_attributes: self.requested_attributes.ok_or(missing_field)??,
+                requested_predicates: self.requested_predicates.ok_or(missing_field)??,
             },
             msg_ref_id: None
         })

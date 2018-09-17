@@ -27,89 +27,149 @@ struct GetMessagesPayload{
     pairwise_dids: Option<Vec<String>>,
 }
 
+//Todo: to_did, agent_did, agent_vk are required for .send_secure but not for download. SPlit up message?
 #[derive(Serialize, Debug, PartialEq, PartialOrd, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GetMessages {
     #[serde(rename = "to")]
-    to_did: String,
-    agent_payload: String,
+    to_did: Option<String>,
+    agent_payload: Option<String>,
     #[serde(skip_serializing, default)]
     payload: GetMessagesPayload,
     #[serde(skip_serializing, default)]
-    to_vk: String,
+    to_vk: Option<String>,
     #[serde(skip_serializing, default)]
-    validate_rc: u32,
+    agent_did: Option<String>,
     #[serde(skip_serializing, default)]
-    agent_did: String,
-    #[serde(skip_serializing, default)]
-    agent_vk: String,
+    agent_vk: Option<String>,
 }
 
-impl GetMessages{
+pub struct GetMessagesBuilder {
+    to_did: Option<Result<String, u32>>,
+    agent_payload: Option<Result<String, u32>>,
+    to_vk: Option<Result<String, u32>>,
+    agent_did: Option<Result<String, u32>>,
+    agent_vk: Option<Result<String, u32>>,
+    msg_type: Option<MsgType>,
+    exclude_payload: Option<String>,
+    uids: Option<Vec<String>>,
+    status_codes: Option<Vec<String>>,
+    pairwise_dids: Option<Vec<String>>,
 
-    pub fn create() -> GetMessages {
-        GetMessages {
-            to_did: String::new(),
-            to_vk: String::new(),
-            payload: GetMessagesPayload{
-                msg_type: MsgType { name: "GET_MSGS".to_string(), ver: "1.0".to_string(), },
-                uids: None,
-                exclude_payload: None,
-                status_codes: None,
-                pairwise_dids: None,
-            },
-            agent_payload: String::new(),
-            validate_rc: error::SUCCESS.code_num,
-            agent_did: String::new(),
-            agent_vk: String::new(),
+}
+
+impl MsgUtils for GetMessagesBuilder {}
+impl GeneralMessageBuilder for GetMessagesBuilder {
+    type MsgBuilder = GetMessagesBuilder;
+    type Msg = GetMessages;
+
+    fn new() -> GetMessagesBuilder {
+        GetMessagesBuilder {
+            to_did: None,
+            agent_payload: None,
+            to_vk: None,
+            agent_did: None,
+            agent_vk: None,
+            msg_type: None,
+            exclude_payload: None,
+            uids: None,
+            status_codes: None,
+            pairwise_dids: None,
         }
     }
 
-    pub fn uid(&mut self, uids: Option<Vec<String>>) -> &mut Self{
-        //Todo: validate msg_uid??
-        self.payload.uids = uids;
+    fn to(mut self, did: &str) -> GetMessagesBuilder {
+        self.to_did = Some(validation::validate_did(did));
         self
     }
 
-    pub fn status_codes(&mut self, status_codes: Option<Vec<String>>) -> &mut Self{
-        //Todo: validate msg_uid??
-        self.payload.status_codes = status_codes;
+    fn to_vk(mut self, vk: &str) -> GetMessagesBuilder {
+        self.to_vk = Some(validation::validate_verkey(vk));
         self
     }
 
-    pub fn pairwise_dids(&mut self, pairwise_dids: Option<Vec<String>>) -> &mut Self{
-        //Todo: validate msg_uid??
-        self.payload.pairwise_dids = pairwise_dids;
+    fn agent_did(mut self, did: &str) -> GetMessagesBuilder {
+        self.agent_did = Some(validation::validate_did(did));
         self
     }
 
-    pub fn include_edge_payload(&mut self, payload: &str) -> &mut Self {
-        //todo: is this a json value, String??
-        self.payload.exclude_payload = Some(payload.to_string());
+    fn agent_vk(mut self, vk: &str) -> GetMessagesBuilder {
+        self.agent_vk = Some(validation::validate_verkey(vk));
+        self
+    }
+    fn build(self) -> Result<GetMessages, u32> {
+        Ok(GetMessages {
+            to_did: self.optional_field(self.to_did.clone())?,
+            to_vk: self.optional_field(self.to_vk.clone())?,
+            agent_did: self.optional_field(self.agent_did.clone())?,
+            agent_vk: self.optional_field(self.agent_vk.clone())?,
+            agent_payload: self.optional_field(self.agent_payload.clone())?,
+            payload: GetMessagesPayload {
+                msg_type: MsgType { name: "GET_MSGS".to_string(), ver: "1.0".to_string() },
+                exclude_payload: self.exclude_payload,
+                uids: self.uids,
+                status_codes: self.status_codes,
+                pairwise_dids: self.pairwise_dids,
+            }
+        })
+    }
+}
+
+impl GetMessagesBuilder{
+
+    pub fn uid(mut self, uids: Option<Vec<String>>) -> GetMessagesBuilder {
+        self.uids = uids;
         self
     }
 
-    pub fn send_secure(&mut self) -> Result<Vec<Message>, u32> {
-        let data = match self.msgpack() {
-            Ok(x) => x,
-            Err(x) => return Err(x),
-        };
+    pub fn status_codes(mut self, status_codes: Option<Vec<String>>) -> GetMessagesBuilder {
+        self.status_codes = status_codes;
+        self
+    }
+
+    pub fn pairwise_dids(mut self, pairwise_dids: Option<Vec<String>>) -> GetMessagesBuilder {
+        self.pairwise_dids = pairwise_dids;
+        self
+    }
+
+    pub fn include_edge_payload(mut self, payload: &str) -> GetMessagesBuilder {
+        self.exclude_payload = Some(payload.to_string());
+        self
+    }
+}
+
+impl GeneralMessage for GetMessages{
+    type SendSecureResult = Vec<Message>;
+    fn msgpack(&mut self) -> Result<Vec<u8>,u32> {
+        let data = encode::to_vec_named(&self.payload).or(Err(error::UNKNOWN_ERROR.code_num))?;
+        trace!("get_message content: {:?}", data);
+
+        let msg = Bundled::create(data).encode()?;
+
+        bundle_for_agent(
+            msg,
+            self.to_vk.as_ref().ok_or(error::MISSING_MSG_FIELD.code_num)?,
+            self.agent_did.as_ref().ok_or(error::MISSING_MSG_FIELD.code_num)?,
+            self.agent_vk.as_ref().ok_or(error::MISSING_MSG_FIELD.code_num)?
+        )
+    }
+
+    fn send_secure(&mut self) -> Result<Vec<Message>, u32> {
+        let data = self.msgpack()?;
 
         match httpclient::post_u8(&data) {
-            Err(_) => return Err(error::POST_MSG_FAILURE.code_num),
             Ok(response) => if settings::test_agency_mode_enabled() && response.len() == 0 {
                 return Ok(Vec::new());
             } else {
                 parse_get_messages_response(response)
             },
+            Err(_) => return Err(error::POST_MSG_FAILURE.code_num),
         }
     }
+}
 
+impl GetMessages{
     pub fn download_messages(&mut self) -> Result<Vec<ConnectionMessages>, u32> {
-        if self.validate_rc != error::SUCCESS.code_num {
-            return Err(self.validate_rc)
-        }
-
         self.payload.msg_type.name = "GET_MSGS_BY_CONNS".to_string();
         let data = encode::to_vec_named(&self.payload).or(Err(error::UNKNOWN_ERROR.code_num))?;
         trace!("get_message content: {:?}", data);
@@ -117,6 +177,7 @@ impl GetMessages{
         let msg = Bundled::create(data).encode()?;
 
         let to_did = settings::get_config_value(settings::CONFIG_REMOTE_TO_SDK_DID)?;
+
         let data = bundle_for_agency(msg, &to_did)?;
 
         match httpclient::post_u8(&data) {
@@ -130,29 +191,6 @@ impl GetMessages{
     }
 }
 
-//Todo: Every GeneralMessage extension, duplicates code
-impl GeneralMessage for GetMessages{
-    type Msg = GetMessages;
-
-    fn set_agent_did(&mut self, did: String) { self.agent_did = did; }
-    fn set_agent_vk(&mut self, vk: String) { self.agent_vk = vk; }
-    fn set_to_did(&mut self, to_did: String){ self.to_did = to_did; }
-    fn set_validate_rc(&mut self, rc: u32){ self.validate_rc = rc; }
-    fn set_to_vk(&mut self, to_vk: String){ self.to_vk = to_vk; }
-
-    fn msgpack(&mut self) -> Result<Vec<u8>,u32> {
-        if self.validate_rc != error::SUCCESS.code_num {
-            return Err(self.validate_rc)
-        }
-
-        let data = encode::to_vec_named(&self.payload).or(Err(error::UNKNOWN_ERROR.code_num))?;
-        trace!("get_message content: {:?}", data);
-
-        let msg = Bundled::create(data).encode()?;
-
-        bundle_for_agent(msg, &self.to_vk, &self.agent_did, &self.agent_vk)
-    }
-}
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, PartialOrd, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -306,6 +344,7 @@ pub fn get_connection_messages(pw_did: &str, pw_vk: &str, agent_did: &str, agent
         .agent_did(&agent_did)
         .agent_vk(&agent_vk)
         .uid(msg_uid)
+        .build()?
         .send_secure() {
         Err(x) => {
             error!("could not post get_messages: {}", x);
@@ -356,6 +395,7 @@ pub fn download_messages(pairwise_dids: Option<Vec<String>>, status_codes: Optio
         .uid(uids)
         .status_codes(status_codes)
         .pairwise_dids(pairwise_dids)
+        .build()?
         .download_messages() {
         Err(x) => {
             error!("could not post get_messages: {}", x);

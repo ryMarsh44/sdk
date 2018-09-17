@@ -33,11 +33,9 @@ struct UpdateProfileDataPayload{
 pub struct UpdateProfileData {
     #[serde(rename = "to")]
     to_did: String,
-    agent_payload: String,
+    agent_payload: Option<String>,
     #[serde(skip_serializing, default)]
     payload: UpdateProfileDataPayload,
-    #[serde(skip_serializing, default)]
-    validate_rc: u32,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -46,45 +44,72 @@ pub struct UpdateProfileResponse {
     code: MsgType,
 }
 
-impl UpdateProfileData{
+pub struct UpdateProfileDataBuilder {
+    to_did: Option<Result<String, u32>>,
+    agent_payload: Option<String>,
+    name: Option<AttrValue>,
+    logo_url: Option<Result<AttrValue, u32>>,
+}
 
-    pub fn create() -> UpdateProfileData {
-        UpdateProfileData {
-            to_did: String::new(),
-            payload: UpdateProfileDataPayload{
-                msg_type: MsgType { name: "UPDATE_CONFIGS".to_string(), ver: "1.0".to_string(), } ,
-                configs: Vec::new(),
-            },
-            agent_payload: String::new(),
-            validate_rc: error::SUCCESS.code_num,
+impl MsgUtils for UpdateProfileDataBuilder {}
+impl UpdateProfileDataBuilder {
+
+    pub fn new() -> UpdateProfileDataBuilder {
+        UpdateProfileDataBuilder {
+            to_did: None,
+            agent_payload: None,
+            name: None,
+            logo_url: None,
         }
     }
 
-    pub fn name(&mut self, name: &str) -> &mut Self{
-        let config = AttrValue { name: "name".to_string(), value: name.to_string(), };
-        self.payload.configs.push(config);
+    pub fn to(mut self, did: &str) -> UpdateProfileDataBuilder {
+        self.to_did = Some(validation::validate_did(did));
         self
     }
 
-    pub fn logo_url(&mut self, url: &str)-> &mut Self{
-        match validation::validate_url(url){
-            Ok(x) => {
-                let config = AttrValue { name: "logoUrl".to_string(), value: url.to_string(), };
-                self.payload.configs.push(config);
-                self
-            }
-            Err(x) => {
-                self.validate_rc = x;
-                self
-            }
-        }
+    pub fn name(mut self, name: &str) -> UpdateProfileDataBuilder {
+        self.name = Some(AttrValue { name: "name".to_string(), value: name.to_string() });
+        self
     }
 
-    pub fn send_secure(&mut self) -> Result<Vec<String>, u32> {
-        let data = match self.msgpack() {
-            Ok(x) => x,
-            Err(x) => return Err(x),
-        };
+    pub fn logo_url(mut self, url: &str) -> UpdateProfileDataBuilder {
+        self.logo_url = Some(
+            validation::validate_url(url)
+                .map(|u| AttrValue { name: "logoUrl".to_string(), value: url.to_string() } )
+        );
+        self
+    }
+
+    pub fn build(self) -> Result<UpdateProfileData, u32> {
+        let mut configs  = Vec::new();
+        if let Some(name) = self.name.clone() { configs.push(name) };
+        if let Some(url) = self.optional_field(self.logo_url.clone())? { configs.push(url) };
+
+        Ok(UpdateProfileData {
+            to_did: self.to_did.clone().ok_or(error::MISSING_MSG_FIELD.code_num)??,
+            agent_payload: self.agent_payload,
+            payload: UpdateProfileDataPayload {
+                msg_type: MsgType { name: "UPDATE_CONFIGS".to_string(), ver: "1.0".to_string() },
+                configs
+            }
+        })
+    }
+}
+
+impl GeneralMessage for UpdateProfileData{
+    type SendSecureResult = Vec<String>;
+    fn msgpack(&mut self) -> Result<Vec<u8>,u32> {
+        let data = encode::to_vec_named(&self.payload).or(Err(error::UNKNOWN_ERROR.code_num))?;
+        trace!("update profile inner bundle: {:?}", data);
+        let msg = Bundled::create(data).encode()?;
+
+        let to_did = settings::get_config_value(settings::CONFIG_REMOTE_TO_SDK_DID)?;
+        bundle_for_agency(msg, &to_did)
+    }
+
+    fn send_secure(&mut self) -> Result<Vec<String>, u32> {
+        let data = self.msgpack()?;
 
         let mut result = Vec::new();
         if settings::test_agency_mode_enabled() {
@@ -101,33 +126,6 @@ impl UpdateProfileData{
         };
 
         Ok(result.to_owned())
-    }
-}
-
-//Todo: Every GeneralMessage extension, duplicates code
-impl GeneralMessage for UpdateProfileData{
-    type Msg = UpdateProfileData;
-
-    fn set_agent_did(&mut self, did: String) {}
-    fn set_agent_vk(&mut self, vk: String) {}
-    fn set_to_did(&mut self, to_did: String){
-        self.to_did = to_did;
-    }
-    fn set_validate_rc(&mut self, rc: u32){
-        self.validate_rc = rc;
-    }
-    fn set_to_vk(&mut self, to_vk: String){ /* nothing to do here for CreateKeymsg */ }
-
-    fn msgpack(&mut self) -> Result<Vec<u8>,u32> {
-        if self.validate_rc != error::SUCCESS.code_num {
-            return Err(self.validate_rc)
-        }
-        let data = encode::to_vec_named(&self.payload).or(Err(error::UNKNOWN_ERROR.code_num))?;
-        trace!("update profile inner bundle: {:?}", data);
-        let msg = Bundled::create(data).encode()?;
-
-        let to_did = settings::get_config_value(settings::CONFIG_REMOTE_TO_SDK_DID)?;
-        bundle_for_agency(msg, &to_did)
     }
 }
 
@@ -158,6 +156,7 @@ mod tests {
             .to(to_did)
             .name(&name)
             .logo_url(&url)
+            .build().unwrap()
             .msgpack().unwrap();
     }
 
@@ -176,6 +175,7 @@ mod tests {
             .to(agent_did.as_ref())
             .name("name")
             .logo_url("https://random.com")
+            .build().unwrap()
             .msgpack().unwrap();
         assert!(msg.len() > 0);
     }

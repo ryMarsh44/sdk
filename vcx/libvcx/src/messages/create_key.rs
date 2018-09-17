@@ -12,6 +12,17 @@ use serde::Deserialize;
 use self::rmp_serde::Deserializer;
 
 
+
+#[derive(Serialize, Deserialize)]
+pub struct CreateKeyResponse {
+    #[serde(rename = "@type")]
+    msg_type: MsgType,
+    #[serde(rename = "withPairwiseDID")]
+    for_did: String,
+    #[serde(rename = "withPairwiseDIDVerKey")]
+    for_verkey: String,
+}
+
 #[derive(Clone, Deserialize, Serialize, Debug, PartialEq, PartialOrd)]
 #[serde(rename_all = "camelCase")]
 struct CreateKeyPayload{
@@ -28,73 +39,108 @@ struct CreateKeyPayload{
 pub struct CreateKeyMsg {
     #[serde(rename = "to")]
     to_did: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    to_vk: Option<String>,
+    agent_did: Option<String>,
+    agent_vk: Option<String>,
     agent_payload: String,
     #[serde(skip_serializing, default)]
     payload: CreateKeyPayload,
-    #[serde(skip_serializing, default)]
-    validate_rc: u32,
-    agent_did: String,
-    agent_vk: String,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct CreateKeyResponse {
-    #[serde(rename = "@type")]
-    msg_type: MsgType,
-    #[serde(rename = "withPairwiseDID")]
-    for_did: String,
-    #[serde(rename = "withPairwiseDIDVerKey")]
-    for_verkey: String,
+pub struct CreateKeyMsgBuilder {
+    to_did: Option<Result<String, u32>>,
+    to_vk: Option<Result<String, u32>>,
+    agent_did: Option<Result<String, u32>>,
+    agent_vk: Option<Result<String, u32>>,
+    for_did: Option<Result<String, u32>>,
+    for_vk: Option<Result<String, u32>>,
 }
 
-impl CreateKeyMsg{
+impl MsgUtils for CreateKeyMsgBuilder {}
+impl GeneralMessageBuilder for CreateKeyMsgBuilder {
+    type MsgBuilder = CreateKeyMsgBuilder;
+    type Msg = CreateKeyMsg;
 
-    pub fn create() -> CreateKeyMsg {
-        CreateKeyMsg {
-            to_did: String::new(),
-            payload: CreateKeyPayload{
-                msg_type: MsgType { name: "CREATE_KEY".to_string(), ver: "1.0".to_string(), } ,
-                for_did: String::new(),
-                for_verkey: String::new(),
+    fn new() -> CreateKeyMsgBuilder {
+        CreateKeyMsgBuilder {
+            to_did: None,
+            to_vk: None,
+            agent_did: None,
+            agent_vk: None,
+            for_did: None,
+            for_vk: None,
+        }
+    }
+
+    fn to(mut self, did: &str) -> CreateKeyMsgBuilder {
+        self.to_did = Some(validation::validate_did(did));
+        self
+    }
+
+    fn to_vk(mut self, vk: &str) -> CreateKeyMsgBuilder {
+        self.to_vk = Some(validation::validate_verkey(vk));
+        self
+    }
+
+    fn agent_did(mut self, did: &str) -> CreateKeyMsgBuilder {
+        self.agent_did = Some(validation::validate_did(did));
+        self
+    }
+
+    fn agent_vk(mut self, vk: &str) -> CreateKeyMsgBuilder {
+        self.agent_vk = Some(validation::validate_verkey(vk));
+        self
+    }
+
+    fn build(self) -> Result<CreateKeyMsg, u32> {
+        let build_err = error::MISSING_MSG_FIELD.code_num;
+
+        Ok(CreateKeyMsg {
+            to_did: self.to_did.clone().ok_or(build_err)??,
+            to_vk: self.optional_field(self.to_vk.clone())?,
+            agent_did: self.optional_field(self.agent_did.clone())?,
+            agent_vk: self.optional_field(self.agent_vk.clone())?,
+            payload: CreateKeyPayload {
+                msg_type: MsgType { name: "CREATE_KEY".to_string(), ver: "1.0".to_string()},
+                for_did: self.for_did.clone().ok_or(build_err)??,
+                for_verkey: self.for_vk.clone().ok_or(build_err)??,
             },
             agent_payload: String::new(),
-            validate_rc: error::SUCCESS.code_num,
-            agent_did: String::new(),
-            agent_vk: String::new(),
-        }
+        })
+    }
+}
+
+impl CreateKeyMsgBuilder {
+    pub fn for_did(mut self, did: &str) -> CreateKeyMsgBuilder {
+        self.for_did = Some(validation::validate_did(did));
+        self
     }
 
-    pub fn for_did(&mut self, did: &str) ->&mut Self{
-        match validation::validate_did(did){
-            Ok(x) => {
-                self.payload.for_did = x;
-                self
-            },
-            Err(x) => {
-                self.validate_rc = x;
-                self
-            },
-        }
+    pub fn for_verkey(mut self, vk: &str) -> CreateKeyMsgBuilder {
+        self.for_vk = Some(validation::validate_verkey(vk));
+        self
+    }
+}
+
+//Todo: Every GeneralMessage extension, duplicates code
+impl GeneralMessage for CreateKeyMsg  {
+    type SendSecureResult = Vec<String>;
+    fn msgpack(&mut self) -> Result<Vec<u8>,u32> {
+        let data = encode::to_vec_named(&self.payload)
+            .map_err(|e| {
+                error!("could not encode create_keys msg: {}", e);
+                error::INVALID_MSGPACK.code_num
+            })?;
+
+        debug!("create_keys inner bundle: {:?}", data);
+        let msg = Bundled::create(data).encode()?;
+
+        bundle_for_agency(msg, &self.to_did)
     }
 
-    pub fn for_verkey(&mut self, verkey: &str) -> &mut Self {
-        match validation::validate_verkey(verkey){
-            Ok(x) => {
-                self.payload.for_verkey = x;
-                self
-            },
-            Err(x) => {
-                self.validate_rc = x;
-                self
-            },
-        }
-    }
-
-    pub fn send_secure(&mut self) -> Result<Vec<String>, u32> {
-        let data = match self.msgpack() {
-            Ok(x) => x,
-            Err(x) => return Err(x),
-        };
+    fn send_secure(&mut self) -> Result<Vec<String>, u32> {
+        let data = self.msgpack()?;
 
         if settings::test_agency_mode_enabled() {
             return Ok(vec!["U5LXs4U7P9msh647kToezy".to_string(), "FktSZg8idAVzyQZrdUppK6FTrfAzW3wWVzAjJAfdUvJq".to_string()]);
@@ -111,35 +157,6 @@ impl CreateKeyMsg{
         };
 
         Ok(result.to_owned())
-    }
-}
-
-//Todo: Every GeneralMessage extension, duplicates code
-impl GeneralMessage for CreateKeyMsg  {
-    type Msg = CreateKeyMsg;
-
-    fn set_agent_did(&mut self, did: String) { self.agent_did = did; }
-    fn set_agent_vk(&mut self, vk: String) { self.agent_vk = vk; }
-    fn set_to_did(&mut self, to_did: String){ self.to_did = to_did; }
-    fn set_validate_rc(&mut self, rc: u32){ self.validate_rc = rc; }
-    fn set_to_vk(&mut self, to_vk: String){ /* nothing to do here for CreateKeymsg */ }
-
-    fn msgpack(&mut self) -> Result<Vec<u8>,u32> {
-        if self.validate_rc != error::SUCCESS.code_num {
-            return Err(self.validate_rc)
-        }
-        let data = match encode::to_vec_named(&self.payload) {
-            Ok(x) => x,
-            Err(x) => {
-                error!("could not encode create_keys msg: {}", x);
-                return Err(error::INVALID_MSGPACK.code_num);
-            },
-        };
-        debug!("create_keys inner bundle: {:?}", data);
-        let msg = Bundled::create(data).encode()?;
-
-        let to_did = settings::get_config_value(settings::CONFIG_REMOTE_TO_SDK_DID)?;
-        bundle_for_agency(msg, &to_did)
     }
 }
 
@@ -162,17 +179,6 @@ mod tests {
     use messages::create_keys;
 
     #[test]
-    fn test_create_key_returns_message_with_create_key_as_payload() {
-        let msg = create_keys();
-        let msg_payload = CreateKeyPayload {
-            for_did: String::new(),
-            for_verkey: String::new(),
-            msg_type: MsgType { name: "CREATE_KEY".to_string(), ver: "1.0".to_string(), } ,
-        };
-        assert_eq!(msg.payload, msg_payload);
-    }
-
-    #[test]
     fn test_create_key_set_values() {
         let to_did = "8XFh8yBzrpJQmNyZzgoTqB";
         let for_did = "11235yBzrpJQmNyZzgoTqB";
@@ -185,7 +191,10 @@ mod tests {
         let msg = create_keys()
             .to(to_did)
             .for_did(for_did)
-            .for_verkey(for_verkey).clone();
+            .for_verkey(for_verkey)
+            .agent_did(to_did)
+            .agent_vk(for_verkey)
+            .build().unwrap();
         assert_eq!(msg.payload, msg_payload);
     }
 
@@ -205,6 +214,7 @@ mod tests {
             .to(&agent_did)
             .for_did(&my_did)
             .for_verkey(&my_vk)
+            .build().unwrap()
             .msgpack().unwrap();
         assert!(bytes.len() > 0);
     }
@@ -217,19 +227,6 @@ mod tests {
 
         assert_eq!(result.0, "U5LXs4U7P9msh647kToezy");
         assert_eq!(result.1, "FktSZg8idAVzyQZrdUppK6FTrfAzW3wWVzAjJAfdUvJq");
-    }
-
-    #[test]
-    fn test_create_key_set_invalid_did_errors(){
-        let to_did = "Fh8yBzrpJQmNyZzgoTqB";
-        let for_did = "11235yBzrpJQmNyZzgoTqB";
-        let for_verkey = "EkVTa7SCJ5SntpYyX7CSb2pcBhiVGT9kWSagA8a9T69A";
-        let msg = create_keys()
-            .to(to_did)
-            .for_did(for_did)
-            .for_verkey(for_verkey).clone();
-
-        assert_eq!(msg.validate_rc, error::INVALID_DID.code_num);
     }
 }
 

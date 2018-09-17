@@ -10,16 +10,7 @@ use serde::Deserialize;
 use self::rmp_serde::Deserializer;
 use messages::*;
 
-/*
-pub struct SendMessage {
-message: Option<String>,
-agent_payload: Option<String>,
-status_code: Option<String>,
-uid: Option<String>,
-title: Option<String>,
-detail: Option<String>,
-}
-*/
+#[derive(Serialize, Debug, PartialEq, PartialOrd, Clone)]
 pub struct SendMessage {
     message: String,
     to_did: String,
@@ -33,18 +24,6 @@ pub struct SendMessage {
     status_code: Option<String>,
     title: Option<String>,
     detail: Option<String>,
-}
-
-#[derive(Serialize, Debug, PartialEq, PartialOrd, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct CreateMessagePayload {
-    #[serde(rename = "@type")]
-    pub msg_type: MsgType,
-    pub mtype: String,
-    #[serde(rename = "replyToMsgId")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reply_to_msg_id: Option<String>,
-    pub send_msg: bool,
 }
 
 #[derive(Serialize, Debug, PartialEq, PartialOrd, Clone)]
@@ -80,6 +59,23 @@ impl GeneralMessageBuilder for SendMessageBuilder {
     type MsgBuilder = SendMessageBuilder;
     type Msg = SendMessage;
 
+    fn new() -> SendMessageBuilder {
+        SendMessageBuilder {
+            message: None,
+            to_did: None,
+            to_vk: None,
+            agent_did:  None,
+            agent_vk:  None,
+            agent_payload:  None,
+            payload:  None,
+            ref_msg_id: None,
+            status_code: None,
+            uid: None,
+            title: None,
+            detail: None,
+        }
+    }
+
     fn to(mut self, did: &str) -> SendMessageBuilder {
         self.to_did = Some(validation::validate_did(did));
         self
@@ -100,13 +96,14 @@ impl GeneralMessageBuilder for SendMessageBuilder {
         self
     }
     fn build(self) -> Result<SendMessage, u32> {
+        let build_err = error::MISSING_MSG_FIELD.code_num;
         Ok(SendMessage {
-            message: self.mandatory_field(self.message.clone())?,
-            to_did: self.mandatory_field(self.to_did.clone())?,
-            to_vk: self.mandatory_field(self.to_vk.clone())?,
-            agent_did: self.mandatory_field(self.agent_did.clone())?,
-            agent_vk: self.mandatory_field(self.agent_vk.clone())?,
-            payload: self.mandatory_field(self.payload.clone())?,
+            message: self.message.clone().ok_or(build_err)??,
+            to_did: self.to_did.clone().ok_or(build_err)??,
+            to_vk: self.to_vk.clone().ok_or(build_err)??,
+            agent_did: self.agent_did.clone().ok_or(build_err)??,
+            agent_vk: self.agent_vk.clone().ok_or(build_err)??,
+            payload: self.payload.clone().ok_or(build_err)??,
             agent_payload: self.optional_field(self.agent_payload.clone())?,
             ref_msg_id: self.optional_field(self.ref_msg_id.clone())?,
             status_code: self.optional_field(self.status_code.clone())?,
@@ -118,23 +115,6 @@ impl GeneralMessageBuilder for SendMessageBuilder {
 }
 
 impl SendMessageBuilder{
-
-    pub fn new() -> SendMessageBuilder {
-        SendMessageBuilder {
-            message: None,
-            to_did: None,
-            to_vk: None,
-            agent_did:  None,
-            agent_vk:  None,
-            agent_payload:  None,
-            payload:  None,
-            ref_msg_id: None,
-            status_code: None,
-            uid: None,
-            title: None,
-            detail: None,
-        }
-    }
 
     pub fn msg_type(mut self, msg: &str) -> SendMessageBuilder{
         self.message = self.wrap_ok(msg.to_string());
@@ -174,16 +154,12 @@ impl SendMessageBuilder{
     }
 }
 
-impl GeneralMessage2 for SendMessage {
+impl GeneralMessage for SendMessage {
+    type SendSecureResult = Vec<String>;
     fn msgpack(&mut self) -> Result<Vec<u8>, u32> {
 
         let create = CreateMessagePayload { msg_type: MsgType { name: "CREATE_MSG".to_string(), ver: "1.0".to_string(), }, mtype: self.message.to_string(), reply_to_msg_id: self.ref_msg_id.clone(), send_msg: true};
         let detail = MessageDetailPayload { msg_type: MsgType { name: "MSG_DETAIL".to_string(), ver: "1.0".to_string(), }, msg: self.payload.clone(), title: self.title.clone(), detail: self.detail.clone(), };
-
-        match serde_json::to_string(&detail) {
-            Ok(x) => debug!("sending message: {}", x),
-            Err(_) => {},
-        };
 
         debug!("SendMessage details: {:?}", detail);
         let create = encode::to_vec_named(&create).or(Err(error::UNKNOWN_ERROR.code_num))?;
@@ -195,14 +171,9 @@ impl GeneralMessage2 for SendMessage {
         let msg = bundle.encode()?;
         bundle_for_agent(msg, &self.to_vk, &self.agent_did, &self.agent_vk)
     }
-}
 
-impl SendMessage{
-    pub fn send_secure(&mut self) -> Result<Vec<String>, u32> {
-        let data = match self.msgpack() {
-            Ok(x) => x,
-            Err(x) => return Err(x),
-        };
+    fn send_secure(&mut self) -> Result<Vec<String>, u32> {
+        let data = self.msgpack()?;
 
         let mut result = Vec::new();
         debug!("sending secure message to agency");
@@ -299,7 +270,6 @@ mod tests {
         assert_eq!("{\"@type\":{\"name\":\"MSG_SENT\",\"ver\":\"1.0\"},\"uids\":[\"ntc2ytb\"]}", result);
     }
 
-    /*
     #[test]
     fn test_parse_send_message_bad_response() {
         init!("true");
@@ -334,5 +304,5 @@ mod tests {
         let to_str = serde_json::to_string(&test_json).unwrap();
         let uid = parse_msg_uid(&to_str).unwrap_err();
         assert_eq!(error::INVALID_JSON.code_num, uid);
-    }*/
+    }
 }

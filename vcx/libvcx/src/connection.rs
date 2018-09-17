@@ -11,10 +11,10 @@ use utils::libindy::crypto;
 use utils::json::mapped_key_rewrite;
 use api::VcxStateType;
 use settings;
-use messages::GeneralMessage;
+use messages::{ GeneralMessageBuilder, GeneralMessage };
 use messages;
-use messages::invite::{InviteDetail, SenderDetail};
-use messages::get_message::Message;
+use messages::invites::{ InviteDetail, SenderDetail, parse_invitation_acceptance_details };
+use messages::get_message::{ Message, GetMsgResponse };
 use serde::Deserialize;
 use self::rmp_serde::{encode, Deserializer};
 use messages::MessageResponseCode::{ MessageAccepted };
@@ -86,6 +86,7 @@ impl Connection {
             .phone_number(&options_obj.phone)
             .agent_did(&self.agent_did)
             .agent_vk(&self.agent_vk)
+            .build().map_err(|e| ConnectionError::CommonError(e))?
             .send_secure() {
             Err(ec) => {
                 // TODO: Refactor Error
@@ -113,6 +114,7 @@ impl Connection {
             .to_vk(&self.pw_verkey)
             .agent_did(&self.agent_did)
             .agent_vk(&self.agent_vk)
+            .build().map_err(|e| ConnectionError::CommonError(e))?
             .send_secure() {
             Err(ec) => {
                 return Err(ConnectionError::CannotDeleteConnection())
@@ -138,19 +140,21 @@ impl Connection {
                 .sender_agency_details(&details.sender_agency_detail)
                 .answer_status_code("MS-104")
                 .reply_to(&details.conn_req_id)
+                .build().map_err(|e| ConnectionError::CommonError(e))?
                 .send_secure() {
-                Err(_) => {
+                Err(e) => {
                     // TODO: Refactor Error
                     // TODO: Implement Correct Error
+                    println!("accpet invite err: {:?}", e);
                     Err(ConnectionError::GeneralConnectionError())
                 },
                 Ok(response) => {
                     self.state = VcxStateType::VcxStateAccepted;
                     Ok(error::SUCCESS.code_num)
                 }
+
             }
-        }
-        else{
+        } else{
             warn!("Can not connect without Invite Details");
             // TODO: Refactor Error
             // TODO: Implement Correct Error
@@ -365,10 +369,13 @@ pub fn create_agent_pairwise(handle: u32) -> Result<u32, ConnectionError> {
     debug!("creating pairwise keys on agent for connection handle {}", handle);
     let pw_did = get_pw_did(handle)?;
     let pw_verkey = get_pw_verkey(handle)?;
+    let to_did = settings::get_config_value(settings::CONFIG_REMOTE_TO_SDK_DID) .map_err(|e| ConnectionError::CommonError(e))?;
 
     let result = messages::create_keys()
+        .to(&to_did)
         .for_did(&pw_did)
         .for_verkey(&pw_verkey)
+        .build().map_err(|e| ConnectionError::CommonError(e))?
         .send_secure()
         .or(Err(ConnectionError::InvalidWalletSetup()))?;   // Throw a context specific error
     debug!("create key for handle: {} with did/vk: {:?}",  handle,  result);
@@ -385,6 +392,7 @@ pub fn update_agent_profile(handle: u32) -> Result<u32, ConnectionError> {
             .to(&pw_did)
             .name(&name)
             .logo_url(&settings::get_config_value(settings::CONFIG_INSTITUTION_LOGO_URL).map_err(|e| ConnectionError::CommonError(e))?)
+            .build().map_err(|e| ConnectionError::CommonError(e))?
             .send_secure() {
             Ok(_) => Ok(error::SUCCESS.code_num),
             Err(ec) => Err(ConnectionError::CommonError(ec)),
@@ -522,19 +530,12 @@ pub fn parse_acceptance_details(handle: u32, message: &Message) -> Result<Sender
     trace!("deserializing GetMsgResponse: {:?}", payload);
 
     let mut de = Deserializer::new(&payload[..]);
-    let response: messages::get_message::GetMsgResponse = match Deserialize::deserialize(&mut de) {
-        Ok(x) => x,
-        Err(x) => {
-            error!("Could not parse outer msg: {}", x);
-            return Err(ConnectionError::CommonError(error::INVALID_MSGPACK.code_num))
-        },
-    };
+    let response: GetMsgResponse = Deserialize::deserialize(&mut de)
+        .or(Err(ConnectionError::CommonError(error::INVALID_MSGPACK.code_num)))?;
 
     let payload = messages::to_u8(&response.msg);
-    // TODO: Refactor Error
-    let details = messages::invite::parse_invitation_acceptance_details(payload).map_err(|e| {ConnectionError::CommonError(e)})?;
 
-    Ok(details)
+    parse_invitation_acceptance_details(payload).map_err(|e| {ConnectionError::CommonError(e)})
 }
 
 pub fn update_state(handle: u32) -> Result<u32, ConnectionError> {
@@ -550,6 +551,7 @@ pub fn update_state(handle: u32) -> Result<u32, ConnectionError> {
         .to_vk(&pw_vk)
         .agent_did(&agent_did)
         .agent_vk(&agent_vk)
+        .build().map_err(|e| ConnectionError::CommonError(e))?
         .send_secure() {
         Err(x) => {
             error!("could not update state for handle {}: {}",  handle, x);

@@ -39,7 +39,6 @@ pub fn validate_nonce(nonce: &str) -> Result<String, u32> {
 }
 
 pub fn validate_key_delegate(delegate: &str) -> Result<String, u32> {
-    //todo: find out what needs to be validated for key_delegate
     let check_delegate = String::from(delegate);
     Ok(check_delegate)
 }

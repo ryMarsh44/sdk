@@ -6,7 +6,7 @@ use api::VcxStateType;
 use utils::error;
 use connection;
 use messages;
-use messages::{ GeneralMessage, GeneralMessageBuilder };
+use messages::{ GeneralMessageBuilder, GeneralMessage };
 use messages::proofs::proof_message::{ProofMessage };
 use messages::proofs::proof_request::{ ProofRequestMessage };
 use messages::extract_json_payload;

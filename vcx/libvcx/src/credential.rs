@@ -13,7 +13,7 @@ use credential_request::{ CredentialRequest };
 
 use messages;
 use messages::to_u8;
-use messages::{ GeneralMessage, GeneralMessageBuilder };
+use messages::{ GeneralMessageBuilder, GeneralMessage };
 use messages::send_message::parse_msg_uid;
 use messages::extract_json_payload;
 

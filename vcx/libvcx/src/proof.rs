@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use messages::proofs::proof_message::{ProofMessage};
 use messages;
 use messages::proofs::proof_request::{ ProofRequestMessage };
-use messages::{ GeneralMessage, GeneralMessageBuilder };
+use messages::{ GeneralMessageBuilder, GeneralMessage };
 use utils::error;
 use utils::constants::*;
 use utils::libindy::anoncreds::libindy_verifier_verify_proof;

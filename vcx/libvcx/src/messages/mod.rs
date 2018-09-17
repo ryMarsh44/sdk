@@ -3,7 +3,7 @@ extern crate rmp_serde;
 extern crate serde_json;
 
 pub mod create_key;
-pub mod invite;
+pub mod invites;
 pub mod validation;
 pub mod get_message;
 pub mod send_message;
@@ -19,12 +19,13 @@ use utils::libindy::crypto;
 use utils::libindy::wallet;
 use utils::error;
 use self::rmp_serde::encode;
-use self::create_key::CreateKeyMsg;
-use self::update_connection::DeleteConnection;
-use self::invite::{AcceptInvite, SendInvite};
-use self::update_profile::UpdateProfileData;
-use self::get_message::GetMessages;
-use self::send_message::SendMessageBuilder;
+use self::create_key::{CreateKeyMsgBuilder, CreateKeyMsg};
+use self::update_connection::{ DeleteConnectionBuilder, DeleteConnection };
+use self::invites::send::{SendInviteBuilder, SendInvite};
+use self::invites::accept::{AcceptInviteBuilder, AcceptInvite};
+use self::update_profile::{ UpdateProfileDataBuilder, UpdateProfileData };
+use self::get_message::{ GetMessagesBuilder, GetMessages };
+use self::send_message::{SendMessageBuilder, SendMessage };
 use serde::Deserialize;
 use self::rmp_serde::Deserializer;
 use serde_json::Value;
@@ -45,13 +46,17 @@ pub struct Payload {
     pub msg: String,
 }
 
+//Todo: Update with all Messages. Have builder trait functionality
 #[derive(Clone, Serialize, Debug, PartialEq, PartialOrd)]
 pub enum MessageType {
     EmptyPayload{},
     CreateKeyMsg(CreateKeyMsg),
     SendInviteMsg(SendInvite),
+    AcceptInvite(AcceptInvite),
     UpdateInfoMsg(UpdateProfileData),
     GetMessagesMsg(GetMessages),
+    SendMessageMsg(SendMessage),
+    DeleteConnectionMsg(DeleteConnection)
 }
 
 pub enum MessageResponseCode {
@@ -87,6 +92,18 @@ pub struct MsgResponse {
     #[serde(rename = "@type")]
     msg_type: MsgType,
     uid: String,
+}
+
+#[derive(Serialize, Debug, PartialEq, PartialOrd, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateMessagePayload {
+    #[serde(rename = "@type")]
+    pub msg_type: MsgType,
+    pub mtype: String,
+    #[serde(rename = "replyToMsgId")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reply_to_msg_id: Option<String>,
+    pub send_msg: bool,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, PartialOrd)]
@@ -257,91 +274,21 @@ pub trait GeneralMessageBuilder {
 
     //todo: deserialize_message
 
-    fn to(mut self, did: &str) -> Self::MsgBuilder;
-    fn to_vk(mut self, vk: &str) -> Self::MsgBuilder;
-    fn agent_did(mut self, did: &str) -> Self::MsgBuilder;
-    fn agent_vk(mut self, vk: &str) -> Self::MsgBuilder;
+    fn new() -> Self::MsgBuilder;
+    fn to(self, did: &str) -> Self::MsgBuilder;
+    fn to_vk(self, vk: &str) -> Self::MsgBuilder;
+    fn agent_did(self, did: &str) -> Self::MsgBuilder;
+    fn agent_vk(self, vk: &str) -> Self::MsgBuilder;
     fn build(self) -> Result<Self::Msg, u32>;
 }
 
-pub trait GeneralMessage2 {
+pub trait GeneralMessage {
+    type SendSecureResult;
     fn msgpack(&mut self) -> Result<Vec<u8>, u32>;
-}
-
-pub trait GeneralMessage{
-    type Msg;
-
-    //todo: deserialize_message
-
-    fn to(&mut self, to_did: &str) -> &mut Self {
-        match validation::validate_did(to_did){
-            Ok(x) => {
-                self.set_to_did(x);
-                self
-            },
-            Err(x) => {
-                warn!("could not validate recipient did");
-                self.set_validate_rc(x);
-                self
-            },
-        }
-    }
-
-    fn to_vk(&mut self, to_vk: &str) -> &mut Self {
-         match validation::validate_verkey(to_vk){
-            Ok(x) => {
-                self.set_to_vk(x);
-                self
-            },
-            Err(x) => {
-                warn!("could not validate recipient vk");
-                self.set_validate_rc(x);
-                self
-            },
-        }
-    }
-
-    fn agent_did(&mut self, did: &str) -> & mut Self {
-         match validation::validate_did(did){
-            Ok(x) => {
-                self.set_agent_did(x);
-                self
-            },
-            Err(x) => {
-                warn!("could not validate agent_did");
-                self.set_validate_rc(x);
-                self
-            },
-        }
-    }
-
-    fn agent_vk(&mut self, to_vk: &str) -> &mut Self {
-         match validation::validate_verkey(to_vk){
-            Ok(x) => {
-                self.set_agent_vk(x);
-                self
-            },
-            Err(x) => {
-                warn!("could not validate agent_vk");
-                self.set_validate_rc(x);
-                self
-            },
-        }
-    }
-
-    fn set_to_vk(&mut self, to_vk: String);
-    fn set_to_did(&mut self, to_did: String);
-    fn set_agent_did(&mut self, did: String);
-    fn set_agent_vk(&mut self, vk: String);
-    fn set_validate_rc(&mut self, rc: u32);
-    fn msgpack(&mut self) -> Result<Vec<u8>, u32>;
+    fn send_secure(&mut self) -> Result<Self::SendSecureResult, u32>;
 }
 
 pub trait MsgUtils {
-    fn mandatory_field<T>(&self, field: Option<Result<T, u32>>) -> Result<T, u32> {
-        field.ok_or(error::MISSING_MSG_FIELD.code_num)?
-    }
-
     fn optional_field<T>(&self, field: Option<Result<T, u32>>) -> Result<Option<T>, u32> {
         field.map_or(Ok(None), |rc| {
             rc.map(|x| Some(x))
@@ -353,12 +300,12 @@ pub trait MsgUtils {
     fn wrap_err<T>(&self, err: u32) -> Option<Result<T, u32>> { Some(Err(err))}
 }
 
-pub fn create_keys() -> CreateKeyMsg { CreateKeyMsg::create() }
-pub fn send_invite() -> SendInvite { SendInvite::create() }
-pub fn delete_connection() -> DeleteConnection { DeleteConnection::create() }
-pub fn accept_invite() -> AcceptInvite { AcceptInvite::create() }
-pub fn update_data() -> UpdateProfileData{ UpdateProfileData::create() }
-pub fn get_messages() -> GetMessages { GetMessages::create() }
+pub fn create_keys() -> CreateKeyMsgBuilder { CreateKeyMsgBuilder::new() }
+pub fn send_invite() -> SendInviteBuilder { SendInviteBuilder::new() }
+pub fn delete_connection() -> DeleteConnectionBuilder { DeleteConnectionBuilder::new() }
+pub fn accept_invite() -> AcceptInviteBuilder { AcceptInviteBuilder::new() }
+pub fn update_data() -> UpdateProfileDataBuilder { UpdateProfileDataBuilder::new() }
+pub fn get_messages() -> GetMessagesBuilder { GetMessagesBuilder::new() }
 pub fn send_message() -> SendMessageBuilder { SendMessageBuilder::new() }
 pub fn proof_request() -> ProofRequestBuilder { ProofRequestBuilder::new() }
 

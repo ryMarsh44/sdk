@@ -5,7 +5,7 @@ extern crate libc;
 use api::VcxStateType;
 use messages;
 use settings;
-use messages::{ GeneralMessage, GeneralMessageBuilder, MessageResponseCode::MessageAccepted, send_message::parse_msg_uid };
+use messages::{ GeneralMessageBuilder, GeneralMessage, MessageResponseCode::MessageAccepted, send_message::parse_msg_uid };
 use connection;
 use credential_request::{ CredentialRequest };
 use utils::{error,

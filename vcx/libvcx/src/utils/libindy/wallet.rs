@@ -227,6 +227,19 @@ pub mod tests {
     }
 
     #[test]
+    fn test_import_real_wallet() {
+        let import_config = json!({
+            settings::CONFIG_WALLET_NAME: "ConnectMe.wallet",
+            settings::CONFIG_WALLET_KEY: settings::DEFAULT_WALLET_KEY,
+            settings::CONFIG_EXPORTED_WALLET_PATH: "/home/rmarsh/Downloads/ConnectMe.wallet",
+            settings::CONFIG_WALLET_BACKUP_KEY: "d386fcecf8032310",
+        }).to_string();
+        import(&import_config).unwrap();
+        open_wallet(&settings::DEFAULT_WALLET_NAME).unwrap();
+
+    }
+
+    #[test]
     fn test_import_fails_with_missing_configs() {
         settings::set_config_value(settings::CONFIG_ENABLE_TEST_MODE,"false");
         ::api::vcx::vcx_shutdown(true);
