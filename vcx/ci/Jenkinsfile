@@ -112,15 +112,15 @@ def mainUbuntu() {
                     withCredentials([usernameColonPassword(credentialsId: 'jenkins-kraken-svc', variable: 'KRAKEN_CREDENTIALS')]) {
                         libvcx.inside("--network=host") {
                             // ******** Publish Libvcx Debian to repo ********
-                            sh "vcx/ci/scripts/publish.sh \"${KRAKEN_CREDENTIALS}\" \"libvcx*.deb\" https://kraken.corp.evernym.com/repo/portal_dev/upload"
-                            sh "vcx/ci/scripts/publish.sh \"${KRAKEN_CREDENTIALS}\" \"libvcx*.deb\" https://kraken.corp.evernym.com/repo/agency_dev/upload"
+                            sh "vcx/ci/scripts/publish.sh \"libvcx*.deb\" https://kraken.corp.evernym.com/repo/portal_dev/upload"
+                            sh "vcx/ci/scripts/publish.sh \"libvcx*.deb\" https://kraken.corp.evernym.com/repo/agency_dev/upload"
 
                             // ******** Publish Npm Package to filely repo ********
-                            sh "vcx/ci/scripts/publish.sh \"${KRAKEN_CREDENTIALS}\" \"*.tgz\" https://kraken.corp.evernym.com/repo/npm/upload"
+                            sh "vcx/ci/scripts/publish.sh \"*.tgz\" https://kraken.corp.evernym.com/repo/npm/upload"
 
                             // ******** Publish vcx Debian To Repo (NPM PACKAGES)
-                            sh "vcx/ci/scripts/publish.sh \"${KRAKEN_CREDENTIALS}\" \"vcx_*.deb\" https://kraken.corp.evernym.com/repo/agency_dev/upload"
-                            sh "vcx/ci/scripts/publish.sh \"${KRAKEN_CREDENTIALS}\" \"vcx_*.deb\" https://kraken.corp.evernym.com/repo/portal_dev/upload"
+                            sh "vcx/ci/scripts/publish.sh \"vcx_*.deb\" https://kraken.corp.evernym.com/repo/agency_dev/upload"
+                            sh "vcx/ci/scripts/publish.sh \"vcx_*.deb\" https://kraken.corp.evernym.com/repo/portal_dev/upload"
 
 
                             // ******** Archive with Jenkins ********
@@ -238,7 +238,7 @@ def buildAndroid(arch) {
             android.inside {
                 ANDROID_SCRIPT_PATH = 'vcx/ci/scripts/androidBuild.sh'
                 LIBINDY_BRANCH="stable"
-                LIBINDY_VERSION="1.6.5"
+                LIBINDY_VERSION="1.6.6"
                 LIBINDY_TAG=""
 
                 sh 'sudo ./vcx/ci/scripts/installCert.sh'
