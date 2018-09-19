@@ -99,6 +99,7 @@ impl UpdateProfileDataBuilder {
 
 impl GeneralMessage for UpdateProfileData{
     type SendSecureResult = Vec<String>;
+
     fn msgpack(&mut self) -> Result<Vec<u8>,u32> {
         let data = encode::to_vec_named(&self.payload).or(Err(error::UNKNOWN_ERROR.code_num))?;
         trace!("update profile inner bundle: {:?}", data);
@@ -108,7 +109,7 @@ impl GeneralMessage for UpdateProfileData{
         bundle_for_agency(msg, &to_did)
     }
 
-    fn send_secure(&mut self) -> Result<Vec<String>, u32> {
+    fn send_secure(&mut self) -> Result<Self::SendSecureResult, u32> {
         let data = self.msgpack()?;
 
         let mut result = Vec::new();

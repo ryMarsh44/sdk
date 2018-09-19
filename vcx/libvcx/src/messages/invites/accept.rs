@@ -87,28 +87,28 @@ impl GeneralMessageBuilder for AcceptInviteBuilder {
         }
     }
 
-    fn to(mut self, did: &str) -> AcceptInviteBuilder {
+    fn to(mut self, did: &str) -> Self::MsgBuilder {
         self.to_did = Some(validation::validate_did(did));
         self
     }
 
-    fn to_vk(mut self, vk: &str) -> AcceptInviteBuilder {
+    fn to_vk(mut self, vk: &str) -> Self::MsgBuilder {
         self.to_vk = Some(validation::validate_verkey(vk));
         self
     }
 
-    fn agent_did(mut self, did: &str) -> AcceptInviteBuilder {
+    fn agent_did(mut self, did: &str) -> Self::MsgBuilder {
         self.agent_did = Some(validation::validate_did(did));
         self
     }
 
-    fn agent_vk(mut self, vk: &str) -> AcceptInviteBuilder {
+    fn agent_vk(mut self, vk: &str) -> Self::MsgBuilder {
         self.agent_vk = Some(validation::validate_verkey(vk));
         self.key_delegate = Some(vk.to_string());
         self
     }
 
-    fn build(self) -> Result<AcceptInvite, u32> {
+    fn build(self) -> Result<Self::Msg, u32> {
         let build_err = error::MISSING_MSG_FIELD.code_num;
 
         let to_did = self.to_did.clone().ok_or(build_err)??;
@@ -187,6 +187,7 @@ impl AcceptInviteBuilder{
 
 impl GeneralMessage for AcceptInvite{
     type SendSecureResult = String;
+
     fn msgpack(&mut self) -> Result<Vec<u8>,u32> {
         debug!("connection invitation details: {:?}", &self.payload.msg_detail_payload);
         let create = encode::to_vec_named(&self.payload.create_payload).or(Err(error::UNKNOWN_ERROR.code_num))?;
@@ -200,7 +201,7 @@ impl GeneralMessage for AcceptInvite{
         bundle_for_agent(msg, &self.to_vk, &self.agent_did, &self.agent_vk)
     }
 
-    fn send_secure(&mut self) -> Result<String, u32> {
+    fn send_secure(&mut self) -> Result<Self::SendSecureResult, u32> {
         let data = self.msgpack()?;
 
         if settings::test_agency_mode_enabled() { httpclient::set_next_u8_response(ACCEPT_INVITE_RESPONSE.to_vec()); }

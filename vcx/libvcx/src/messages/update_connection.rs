@@ -52,27 +52,27 @@ impl GeneralMessageBuilder for DeleteConnectionBuilder {
         }
     }
 
-    fn to(mut self, did: &str) -> DeleteConnectionBuilder {
+    fn to(mut self, did: &str) -> Self::MsgBuilder {
         self.to_did = Some(validation::validate_did(did));
         self
     }
 
-    fn to_vk(mut self, vk: &str) -> DeleteConnectionBuilder {
+    fn to_vk(mut self, vk: &str) -> Self::MsgBuilder {
         self.to_vk = Some(validation::validate_verkey(vk));
         self
     }
 
-    fn agent_did(mut self, did: &str) -> DeleteConnectionBuilder {
+    fn agent_did(mut self, did: &str) -> Self::MsgBuilder {
         self.agent_did = Some(validation::validate_did(did));
         self
     }
 
-    fn agent_vk(mut self, vk: &str) -> DeleteConnectionBuilder {
+    fn agent_vk(mut self, vk: &str) -> Self::MsgBuilder {
         self.agent_vk = Some(validation::validate_verkey(vk));
         self
     }
 
-    fn build(self) -> Result<DeleteConnection, u32> {
+    fn build(self) -> Result<Self::Msg, u32> {
         let build_err = error::MISSING_MSG_FIELD.code_num;
 
         Ok(DeleteConnection {
@@ -100,6 +100,7 @@ impl DeleteConnection {
 
 impl GeneralMessage for DeleteConnection{
     type SendSecureResult = Vec<String>;
+
     fn msgpack(&mut self) -> Result<Vec<u8>,u32> {
         let payload = encode::to_vec_named(&self.payload).or(Err(error::INVALID_JSON.code_num))?;
 
@@ -110,7 +111,7 @@ impl GeneralMessage for DeleteConnection{
         bundle_for_agent(msg, &self.to_vk, &self.agent_did, &self.agent_vk)
     }
 
-    fn send_secure(&mut self) -> Result<Vec<String>, u32> {
+    fn send_secure(&mut self) -> Result<Self::SendSecureResult, u32> {
         let data = self.msgpack()?;
 
         if settings::test_agency_mode_enabled() { httpclient::set_next_u8_response(DELETE_CONNECTION_RESPONSE.to_vec()); }
@@ -153,6 +154,7 @@ impl DeleteConnectionPayload {
 
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;

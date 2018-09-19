@@ -78,26 +78,26 @@ impl GeneralMessageBuilder for GetMessagesBuilder {
         }
     }
 
-    fn to(mut self, did: &str) -> GetMessagesBuilder {
+    fn to(mut self, did: &str) -> Self::MsgBuilder {
         self.to_did = Some(validation::validate_did(did));
         self
     }
 
-    fn to_vk(mut self, vk: &str) -> GetMessagesBuilder {
+    fn to_vk(mut self, vk: &str) -> Self::MsgBuilder {
         self.to_vk = Some(validation::validate_verkey(vk));
         self
     }
 
-    fn agent_did(mut self, did: &str) -> GetMessagesBuilder {
+    fn agent_did(mut self, did: &str) -> Self::MsgBuilder {
         self.agent_did = Some(validation::validate_did(did));
         self
     }
 
-    fn agent_vk(mut self, vk: &str) -> GetMessagesBuilder {
+    fn agent_vk(mut self, vk: &str) -> Self::MsgBuilder {
         self.agent_vk = Some(validation::validate_verkey(vk));
         self
     }
-    fn build(self) -> Result<GetMessages, u32> {
+    fn build(self) -> Result<Self::Msg, u32> {
         Ok(GetMessages {
             to_did: self.optional_field(self.to_did.clone())?,
             to_vk: self.optional_field(self.to_vk.clone())?,
@@ -140,6 +140,7 @@ impl GetMessagesBuilder{
 
 impl GeneralMessage for GetMessages{
     type SendSecureResult = Vec<Message>;
+
     fn msgpack(&mut self) -> Result<Vec<u8>,u32> {
         let data = encode::to_vec_named(&self.payload).or(Err(error::UNKNOWN_ERROR.code_num))?;
         trace!("get_message content: {:?}", data);
@@ -154,7 +155,7 @@ impl GeneralMessage for GetMessages{
         )
     }
 
-    fn send_secure(&mut self) -> Result<Vec<Message>, u32> {
+    fn send_secure(&mut self) -> Result<Self::SendSecureResult, u32> {
         let data = self.msgpack()?;
 
         match httpclient::post_u8(&data) {

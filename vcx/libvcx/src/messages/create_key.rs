@@ -73,27 +73,27 @@ impl GeneralMessageBuilder for CreateKeyMsgBuilder {
         }
     }
 
-    fn to(mut self, did: &str) -> CreateKeyMsgBuilder {
+    fn to(mut self, did: &str) -> Self::MsgBuilder {
         self.to_did = Some(validation::validate_did(did));
         self
     }
 
-    fn to_vk(mut self, vk: &str) -> CreateKeyMsgBuilder {
+    fn to_vk(mut self, vk: &str) -> Self::MsgBuilder {
         self.to_vk = Some(validation::validate_verkey(vk));
         self
     }
 
-    fn agent_did(mut self, did: &str) -> CreateKeyMsgBuilder {
+    fn agent_did(mut self, did: &str) -> Self::MsgBuilder {
         self.agent_did = Some(validation::validate_did(did));
         self
     }
 
-    fn agent_vk(mut self, vk: &str) -> CreateKeyMsgBuilder {
+    fn agent_vk(mut self, vk: &str) -> Self::MsgBuilder {
         self.agent_vk = Some(validation::validate_verkey(vk));
         self
     }
 
-    fn build(self) -> Result<CreateKeyMsg, u32> {
+    fn build(self) -> Result<Self::Msg, u32> {
         let build_err = error::MISSING_MSG_FIELD.code_num;
 
         Ok(CreateKeyMsg {
@@ -126,6 +126,7 @@ impl CreateKeyMsgBuilder {
 //Todo: Every GeneralMessage extension, duplicates code
 impl GeneralMessage for CreateKeyMsg  {
     type SendSecureResult = Vec<String>;
+
     fn msgpack(&mut self) -> Result<Vec<u8>,u32> {
         let data = encode::to_vec_named(&self.payload)
             .map_err(|e| {
@@ -139,7 +140,7 @@ impl GeneralMessage for CreateKeyMsg  {
         bundle_for_agency(msg, &self.to_did)
     }
 
-    fn send_secure(&mut self) -> Result<Vec<String>, u32> {
+    fn send_secure(&mut self) -> Result<Self::SendSecureResult, u32> {
         let data = self.msgpack()?;
 
         if settings::test_agency_mode_enabled() {

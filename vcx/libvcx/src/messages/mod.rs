@@ -282,6 +282,56 @@ pub trait GeneralMessageBuilder {
     fn build(self) -> Result<Self::Msg, u32>;
 }
 
+pub trait GeneralMessageBuilder2 {
+    type MsgBuilder;
+    type Msg;
+
+    //todo: deserialize_message
+
+    fn new() -> Self::MsgBuilder;
+    fn to(&mut self, did: &str) -> &mut Self::MsgBuilder {
+        let mut general_msg = self.get_msg_builder();
+        general_msg.to_did = Some(validation::validate_did(did));
+        self
+    }
+    fn to_vk(&mut self, vk: &str) -> &mut Self::MsgBuilder {
+        let mut general_msg = self.get_msg_builder();
+        general_msg.to_vk = Some(validation::validate_did(vk));
+        self
+    }
+    fn agent_did(&mut self, did: &str) -> &mut Self::MsgBuilder {
+        let mut general_msg = self.get_msg_builder();
+        general_msg.agent_did = Some(validation::validate_did(did));
+        self
+    }
+    fn agent_vk(&mut self, vk: &str) -> &mut Self::MsgBuilder {
+        let mut general_msg = self.get_msg_builder();
+        general_msg.agent_vk = Some(validation::validate_did(vk));
+        self
+    }
+    fn build(self) -> Result<Self::Msg, u32>;
+    fn get_msg_builder(self) -> &GeneralMessage2;
+}
+
+#[derive(Clone)]
+pub struct GeneralMessage2 {
+    pub to_did: Option<Result<String, u32>>,
+    pub to_vk: Option<Result<String, u32>>,
+    pub agent_did:  Option<Result<String, u32>>,
+    pub agent_vk:  Option<Result<String, u32>>,
+}
+
+impl GeneralMessage2 {
+    pub fn new() -> GeneralMessage2 {
+        GeneralMessage2 {
+            to_did: None,
+            to_vk: None,
+            agent_did: None,
+            agent_vk: None,
+        }
+    }
+}
+
 pub trait GeneralMessage {
     type SendSecureResult;
     fn msgpack(&mut self) -> Result<Vec<u8>, u32>;

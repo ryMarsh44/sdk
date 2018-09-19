@@ -73,28 +73,28 @@ impl GeneralMessageBuilder for SendInviteBuilder {
         }
     }
 
-    fn to(mut self, did: &str) -> SendInviteBuilder {
+    fn to(mut self, did: &str) -> Self::MsgBuilder {
         self.to_did = Some(validation::validate_did(did));
         self
     }
 
-    fn to_vk(mut self, vk: &str) -> SendInviteBuilder {
+    fn to_vk(mut self, vk: &str) -> Self::MsgBuilder {
         self.to_vk = Some(validation::validate_verkey(vk));
         self
     }
 
-    fn agent_did(mut self, did: &str) -> SendInviteBuilder {
+    fn agent_did(mut self, did: &str) -> Self::MsgBuilder {
         self.agent_did = Some(validation::validate_did(did));
         self
     }
 
-    fn agent_vk(mut self, vk: &str) -> SendInviteBuilder {
+    fn agent_vk(mut self, vk: &str) -> Self::MsgBuilder {
         self.agent_vk = Some(validation::validate_verkey(vk));
         self.key_delegate = Some(vk.to_string());
         self
     }
 
-    fn build(self) -> Result<SendInvite, u32> {
+    fn build(self) -> Result<Self::Msg, u32> {
         let build_err = error::MISSING_MSG_FIELD.code_num;
 
         let to_did = self.to_did.clone().ok_or(build_err)??;
@@ -155,6 +155,7 @@ impl SendInviteBuilder{
 
 impl GeneralMessage for SendInvite{
     type SendSecureResult = Vec<String>;
+
     fn msgpack(&mut self) -> Result<Vec<u8>,u32> {
         debug!("connection invitation details: {}", serde_json::to_string(&self.payload.msg_detail_payload).unwrap_or("failure".to_string()));
         let create = encode::to_vec_named(&self.payload.create_payload).or(Err(error::UNKNOWN_ERROR.code_num))?;
@@ -168,7 +169,7 @@ impl GeneralMessage for SendInvite{
         bundle_for_agent(msg, &self.to_vk, &self.agent_did, &self.agent_vk)
     }
 
-    fn send_secure(&mut self) -> Result<Vec<String>, u32> {
+    fn send_secure(&mut self) -> Result<Self::SendSecureResult, u32> {
         let data = self.msgpack()?;
 
         if settings::test_agency_mode_enabled() { httpclient::set_next_u8_response(SEND_INVITE_RESPONSE.to_vec()); }
