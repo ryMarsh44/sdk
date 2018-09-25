@@ -49,10 +49,7 @@ pub struct SendInvite {
 }
 
 pub struct SendInviteBuilder {
-    to_did: Option<Result<String, u32>>,
-    to_vk: Option<Result<String, u32>>,
-    agent_did: Option<Result<String, u32>>,
-    agent_vk: Option<Result<String, u32>>,
+    base_msg: BaseMsg,
     key_delegate: Option<String>,
     phone: Option<String>,
 }
@@ -62,34 +59,31 @@ impl GeneralMessageBuilder for SendInviteBuilder {
     type MsgBuilder = SendInviteBuilder;
     type Msg = SendInvite;
 
-    fn new() -> SendInviteBuilder {
+    fn new() -> Self::MsgBuilder {
         SendInviteBuilder {
-            to_did: None,
-            to_vk: None,
-            agent_did: None,
-            agent_vk: None,
+            base_msg: BaseMsg::new(),
             key_delegate: None,
             phone: None,
         }
     }
 
     fn to(mut self, did: &str) -> Self::MsgBuilder {
-        self.to_did = Some(validation::validate_did(did));
+        &self.base_msg.to(did);
         self
     }
 
     fn to_vk(mut self, vk: &str) -> Self::MsgBuilder {
-        self.to_vk = Some(validation::validate_verkey(vk));
+        self.base_msg.to_vk(vk);
         self
     }
 
     fn agent_did(mut self, did: &str) -> Self::MsgBuilder {
-        self.agent_did = Some(validation::validate_did(did));
+        self.base_msg.agent_did(did);
         self
     }
 
     fn agent_vk(mut self, vk: &str) -> Self::MsgBuilder {
-        self.agent_vk = Some(validation::validate_verkey(vk));
+        self.base_msg.agent_vk(vk);
         self.key_delegate = Some(vk.to_string());
         self
     }
@@ -97,10 +91,10 @@ impl GeneralMessageBuilder for SendInviteBuilder {
     fn build(self) -> Result<Self::Msg, u32> {
         let build_err = error::MISSING_MSG_FIELD.code_num;
 
-        let to_did = self.to_did.clone().ok_or(build_err)??;
-        let to_vk = self.to_vk.clone().ok_or(build_err)??;
-        let agent_did = self.agent_did.clone().ok_or(build_err)??;
-        let agent_vk = self.agent_vk.clone().ok_or(build_err)??;
+        let to_did = self.base_msg.to_did.clone().ok_or(build_err)??;
+        let to_vk = self.base_msg.to_vk.clone().ok_or(build_err)??;
+        let agent_did = self.base_msg.agent_did.clone().ok_or(build_err)??;
+        let agent_vk = self.base_msg.agent_vk.clone().ok_or(build_err)??;
         let agent_delegated_key = self.key_delegate.unwrap_or_default();
         let signature = SendInviteBuilder::generate_signature(&to_vk, &agent_did, &agent_delegated_key)?;
 

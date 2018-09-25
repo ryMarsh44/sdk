@@ -56,7 +56,7 @@ impl GeneralMessageBuilder for SendMessageBuilder {
     type MsgBuilder = SendMessageBuilder;
     type Msg = SendMessage;
 
-    fn new() -> SendMessageBuilder {
+    fn new() -> Self::MsgBuilder {
         SendMessageBuilder {
             message: None,
             base_msg: BaseMsg::new(),
@@ -70,26 +70,27 @@ impl GeneralMessageBuilder for SendMessageBuilder {
         }
     }
 
-    fn to(mut self, did: &str) -> SendMessageBuilder {
+    fn to(mut self, did: &str) -> Self::MsgBuilder {
         &self.base_msg.to(did);
         self
     }
 
-    fn to_vk(mut self, vk: &str) -> SendMessageBuilder {
+    fn to_vk(mut self, vk: &str) -> Self::MsgBuilder {
         &self.base_msg.to_vk(vk);
         self
     }
 
-    fn agent_did(mut self, did: &str) -> SendMessageBuilder {
+    fn agent_did(mut self, did: &str) -> Self::MsgBuilder {
         &self.base_msg.agent_did(did);
         self
     }
 
-    fn agent_vk(mut self, vk: &str) -> SendMessageBuilder {
+    fn agent_vk(mut self, vk: &str) -> Self::MsgBuilder {
         &self.base_msg.agent_vk(vk);
         self
     }
-    fn build(self) -> Result<SendMessage, u32> {
+
+    fn build(self) -> Result<Self::Msg, u32> {
         let build_err = error::MISSING_MSG_FIELD.code_num;
         Ok(SendMessage {
             message: self.message.clone().ok_or(build_err)??,

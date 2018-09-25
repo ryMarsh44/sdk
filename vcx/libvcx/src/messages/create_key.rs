@@ -49,10 +49,7 @@ pub struct CreateKeyMsg {
 }
 
 pub struct CreateKeyMsgBuilder {
-    to_did: Option<Result<String, u32>>,
-    to_vk: Option<Result<String, u32>>,
-    agent_did: Option<Result<String, u32>>,
-    agent_vk: Option<Result<String, u32>>,
+    base_msg: BaseMsg,
     for_did: Option<Result<String, u32>>,
     for_vk: Option<Result<String, u32>>,
 }
@@ -62,34 +59,31 @@ impl GeneralMessageBuilder for CreateKeyMsgBuilder {
     type MsgBuilder = CreateKeyMsgBuilder;
     type Msg = CreateKeyMsg;
 
-    fn new() -> CreateKeyMsgBuilder {
+    fn new() -> Self::MsgBuilder {
         CreateKeyMsgBuilder {
-            to_did: None,
-            to_vk: None,
-            agent_did: None,
-            agent_vk: None,
+            base_msg: BaseMsg::new(),
             for_did: None,
             for_vk: None,
         }
     }
 
     fn to(mut self, did: &str) -> Self::MsgBuilder {
-        self.to_did = Some(validation::validate_did(did));
+        &self.base_msg.to(did);
         self
     }
 
     fn to_vk(mut self, vk: &str) -> Self::MsgBuilder {
-        self.to_vk = Some(validation::validate_verkey(vk));
+        &self.base_msg.to_vk(vk);
         self
     }
 
     fn agent_did(mut self, did: &str) -> Self::MsgBuilder {
-        self.agent_did = Some(validation::validate_did(did));
+        &self.base_msg.agent_did(did);
         self
     }
 
     fn agent_vk(mut self, vk: &str) -> Self::MsgBuilder {
-        self.agent_vk = Some(validation::validate_verkey(vk));
+        &self.base_msg.agent_vk(vk);
         self
     }
 
@@ -97,10 +91,10 @@ impl GeneralMessageBuilder for CreateKeyMsgBuilder {
         let build_err = error::MISSING_MSG_FIELD.code_num;
 
         Ok(CreateKeyMsg {
-            to_did: self.to_did.clone().ok_or(build_err)??,
-            to_vk: self.optional_field(self.to_vk.clone())?,
-            agent_did: self.optional_field(self.agent_did.clone())?,
-            agent_vk: self.optional_field(self.agent_vk.clone())?,
+            to_did: self.base_msg.to_did.clone().ok_or(build_err)??,
+            to_vk: self.optional_field(self.base_msg.to_vk.clone())?,
+            agent_did: self.optional_field(self.base_msg.agent_did.clone())?,
+            agent_vk: self.optional_field(self.base_msg.agent_vk.clone())?,
             payload: CreateKeyPayload {
                 msg_type: MsgType { name: "CREATE_KEY".to_string(), ver: "1.0".to_string()},
                 for_did: self.for_did.clone().ok_or(build_err)??,

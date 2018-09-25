@@ -4,8 +4,7 @@ extern crate serde_json;
 use error::{ToErrorCode, messages};
 use serde::Deserialize;
 use self::rmp_serde::{encode, Deserializer};
-use messages::{Bundled, MsgType, bundle_for_agent, unbundle_from_agency, GeneralMessage, MsgUtils, GeneralMessageBuilder};
-use messages::validation;
+use messages::{Bundled, MsgType, bundle_for_agent, unbundle_from_agency, GeneralMessage, MsgUtils, GeneralMessageBuilder, BaseMsg};
 use utils::{error, httpclient};
 use settings;
 use utils::constants::DELETE_CONNECTION_RESPONSE;
@@ -32,10 +31,7 @@ pub struct DeleteConnection {
 }
 
 pub struct DeleteConnectionBuilder {
-    to_did: Option<Result<String, u32>>,
-    to_vk: Option<Result<String, u32>>,
-    agent_did: Option<Result<String, u32>>,
-    agent_vk: Option<Result<String, u32>>,
+    base_msg: BaseMsg,
 }
 
 impl MsgUtils for DeleteConnectionBuilder {}
@@ -43,32 +39,29 @@ impl GeneralMessageBuilder for DeleteConnectionBuilder {
     type MsgBuilder = DeleteConnectionBuilder;
     type Msg = DeleteConnection;
 
-    fn new() -> DeleteConnectionBuilder {
+    fn new() -> Self::MsgBuilder {
         DeleteConnectionBuilder {
-            to_did: None,
-            to_vk: None,
-            agent_did: None,
-            agent_vk: None,
+            base_msg: BaseMsg::new()
         }
     }
 
     fn to(mut self, did: &str) -> Self::MsgBuilder {
-        self.to_did = Some(validation::validate_did(did));
+        &self.base_msg.to(did);
         self
     }
 
     fn to_vk(mut self, vk: &str) -> Self::MsgBuilder {
-        self.to_vk = Some(validation::validate_verkey(vk));
+        &self.base_msg.to_vk(vk);
         self
     }
 
     fn agent_did(mut self, did: &str) -> Self::MsgBuilder {
-        self.agent_did = Some(validation::validate_did(did));
+        &self.base_msg.agent_did(did);
         self
     }
 
     fn agent_vk(mut self, vk: &str) -> Self::MsgBuilder {
-        self.agent_vk = Some(validation::validate_verkey(vk));
+        &self.base_msg.agent_vk(vk);
         self
     }
 
@@ -76,10 +69,10 @@ impl GeneralMessageBuilder for DeleteConnectionBuilder {
         let build_err = error::MISSING_MSG_FIELD.code_num;
 
         Ok(DeleteConnection {
-            to_did: self.to_did.clone().ok_or(build_err)??,
-            to_vk: self.to_vk.clone().ok_or(build_err)??,
-            agent_did: self.agent_did.clone().ok_or(build_err)??,
-            agent_vk: self.agent_vk.clone().ok_or(build_err)??,
+            to_did: self.base_msg.to_did.clone().ok_or(build_err)??,
+            to_vk: self.base_msg.to_vk.clone().ok_or(build_err)??,
+            agent_did: self.base_msg.agent_did.clone().ok_or(build_err)??,
+            agent_vk: self.base_msg.agent_vk.clone().ok_or(build_err)??,
             payload: DeleteConnectionPayload::create(),
         })
     }
