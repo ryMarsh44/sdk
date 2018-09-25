@@ -39,13 +39,9 @@ pub struct MessageDetailPayload {
     detail: Option<String>,
 }
 
-pub struct SendMessageBuilder<'a> {
+pub struct SendMessageBuilder {
     message: Option<Result<String, u32>>,
-    general_msg: GeneralMessage2,
-//    to_did: Option<Result<String, u32>>,
-//    to_vk: Option<Result<String, u32>>,
-//    agent_did:  Option<Result<String, u32>>,
-//    agent_vk:  Option<Result<String, u32>>,
+    base_msg: BaseMsg,
     agent_payload:  Option<Result<String, u32>>,
     payload:  Option<Result<Vec<u8>, u32>>,
     ref_msg_id: Option<Result<String, u32>>,
@@ -56,14 +52,14 @@ pub struct SendMessageBuilder<'a> {
 }
 
 impl MsgUtils for SendMessageBuilder {}
-impl GeneralMessageBuilder2 for SendMessageBuilder {
+impl GeneralMessageBuilder for SendMessageBuilder {
     type MsgBuilder = SendMessageBuilder;
     type Msg = SendMessage;
 
     fn new() -> SendMessageBuilder {
         SendMessageBuilder {
             message: None,
-            general_msg: GeneralMessage2::new(),
+            base_msg: BaseMsg::new(),
             agent_payload:  None,
             payload:  None,
             ref_msg_id: None,
@@ -74,16 +70,33 @@ impl GeneralMessageBuilder2 for SendMessageBuilder {
         }
     }
 
-    fn get_msg_builder(mut self) -> &GeneralMessage2  { &self.general_msg }
+    fn to(mut self, did: &str) -> SendMessageBuilder {
+        &self.base_msg.to(did);
+        self
+    }
 
-    fn build(self) -> Result<Self::Msg, u32> {
+    fn to_vk(mut self, vk: &str) -> SendMessageBuilder {
+        &self.base_msg.to_vk(vk);
+        self
+    }
+
+    fn agent_did(mut self, did: &str) -> SendMessageBuilder {
+        &self.base_msg.agent_did(did);
+        self
+    }
+
+    fn agent_vk(mut self, vk: &str) -> SendMessageBuilder {
+        &self.base_msg.agent_vk(vk);
+        self
+    }
+    fn build(self) -> Result<SendMessage, u32> {
         let build_err = error::MISSING_MSG_FIELD.code_num;
         Ok(SendMessage {
             message: self.message.clone().ok_or(build_err)??,
-            to_did: self.general_msg.to_did.clone().ok_or(build_err)??,
-            to_vk: self.general_msg.to_vk.clone().ok_or(build_err)??,
-            agent_did: self.general_msg.agent_did.clone().ok_or(build_err)??,
-            agent_vk: self.general_msg.agent_vk.clone().ok_or(build_err)??,
+            to_did: self.base_msg.to_did.clone().ok_or(build_err)??,
+            to_vk: self.base_msg.to_vk.clone().ok_or(build_err)??,
+            agent_did: self.base_msg.agent_did.clone().ok_or(build_err)??,
+            agent_vk: self.base_msg.agent_vk.clone().ok_or(build_err)??,
             payload: self.payload.clone().ok_or(build_err)??,
             agent_payload: self.optional_field(self.agent_payload.clone())?,
             ref_msg_id: self.optional_field(self.ref_msg_id.clone())?,
@@ -137,8 +150,8 @@ impl SendMessageBuilder{
 
 impl GeneralMessage for SendMessage {
     type SendSecureResult = Vec<String>;
-
     fn msgpack(&mut self) -> Result<Vec<u8>, u32> {
+
         let create = CreateMessagePayload { msg_type: MsgType { name: "CREATE_MSG".to_string(), ver: "1.0".to_string(), }, mtype: self.message.to_string(), reply_to_msg_id: self.ref_msg_id.clone(), send_msg: true};
         let detail = MessageDetailPayload { msg_type: MsgType { name: "MSG_DETAIL".to_string(), ver: "1.0".to_string(), }, msg: self.payload.clone(), title: self.title.clone(), detail: self.detail.clone(), };
 
@@ -153,7 +166,7 @@ impl GeneralMessage for SendMessage {
         bundle_for_agent(msg, &self.to_vk, &self.agent_did, &self.agent_vk)
     }
 
-    fn send_secure(&mut self) -> Result<Self::SendSecureResult, u32> {
+    fn send_secure(&mut self) -> Result<Vec<String>, u32> {
         let data = self.msgpack()?;
 
         let mut result = Vec::new();

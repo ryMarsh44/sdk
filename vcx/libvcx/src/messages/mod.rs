@@ -272,8 +272,6 @@ pub trait GeneralMessageBuilder {
     type MsgBuilder;
     type Msg;
 
-    //todo: deserialize_message
-
     fn new() -> Self::MsgBuilder;
     fn to(self, did: &str) -> Self::MsgBuilder;
     fn to_vk(self, vk: &str) -> Self::MsgBuilder;
@@ -282,54 +280,31 @@ pub trait GeneralMessageBuilder {
     fn build(self) -> Result<Self::Msg, u32>;
 }
 
-pub trait GeneralMessageBuilder2 {
-    type MsgBuilder;
-    type Msg;
-
-    //todo: deserialize_message
-
-    fn new() -> Self::MsgBuilder;
-    fn to(&mut self, did: &str) -> &mut Self::MsgBuilder {
-        let mut general_msg = self.get_msg_builder();
-        general_msg.to_did = Some(validation::validate_did(did));
-        self
-    }
-    fn to_vk(&mut self, vk: &str) -> &mut Self::MsgBuilder {
-        let mut general_msg = self.get_msg_builder();
-        general_msg.to_vk = Some(validation::validate_did(vk));
-        self
-    }
-    fn agent_did(&mut self, did: &str) -> &mut Self::MsgBuilder {
-        let mut general_msg = self.get_msg_builder();
-        general_msg.agent_did = Some(validation::validate_did(did));
-        self
-    }
-    fn agent_vk(&mut self, vk: &str) -> &mut Self::MsgBuilder {
-        let mut general_msg = self.get_msg_builder();
-        general_msg.agent_vk = Some(validation::validate_did(vk));
-        self
-    }
-    fn build(self) -> Result<Self::Msg, u32>;
-    fn get_msg_builder(self) -> &GeneralMessage2;
-}
-
 #[derive(Clone)]
-pub struct GeneralMessage2 {
+pub struct BaseMsg {
     pub to_did: Option<Result<String, u32>>,
     pub to_vk: Option<Result<String, u32>>,
     pub agent_did:  Option<Result<String, u32>>,
     pub agent_vk:  Option<Result<String, u32>>,
 }
 
-impl GeneralMessage2 {
-    pub fn new() -> GeneralMessage2 {
-        GeneralMessage2 {
+impl BaseMsg {
+    fn new() -> BaseMsg {
+        BaseMsg {
             to_did: None,
             to_vk: None,
             agent_did: None,
             agent_vk: None,
         }
     }
+
+    fn to(&mut self, did: &str) { self.to_did = Some(validation::validate_did(did)); }
+
+    fn to_vk(&mut self, vk: &str) { self.to_vk = Some(validation::validate_verkey(vk)); }
+
+    fn agent_did(&mut self, did: &str) { self.agent_did = Some(validation::validate_did(did)); }
+
+    fn agent_vk(&mut self, vk: &str) { self.agent_vk = Some(validation::validate_verkey(vk)); }
 }
 
 pub trait GeneralMessage {
