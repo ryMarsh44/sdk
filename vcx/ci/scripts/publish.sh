@@ -1,13 +1,13 @@
 #!/bin/bash
-
-if [ $# -ne 2 ]; then
+set +x
+if [ $# -ne 3 ]; then
     echo "USAGE: $0 CREDENTIALS FILE URL"
     exit 1
 fi
 
-CREDENTIALS=$KRAKEN_CREDENTIALS
-FILENAME=$1
-URL=$2
+CREDENTIALS=$1
+FILENAME=$2
+URL=$3
 LOOKUP_DIR="output"
 
 echo "Filename: ${FILENAME}"
@@ -20,4 +20,5 @@ ls -al
 echo 'end info'
 
 find "./output" -type f -name ${FILENAME} -exec curl -u $CREDENTIALS -X POST $URL -F 'file=@{}' \;
+
 
