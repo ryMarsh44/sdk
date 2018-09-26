@@ -94,11 +94,11 @@ impl GeneralMessageBuilder for GetMessagesBuilder {
 
     fn build(self) -> Result<Self::Msg, u32> {
         Ok(GetMessages {
-            to_did: self.optional_field(self.base_msg.to_did.clone())?,
-            to_vk: self.optional_field(self.base_msg.to_vk.clone())?,
-            agent_did: self.optional_field(self.base_msg.agent_did.clone())?,
-            agent_vk: self.optional_field(self.base_msg.agent_vk.clone())?,
-            agent_payload: self.optional_field(self.agent_payload.clone())?,
+            to_did: Self::optional_field(self.base_msg.to_did.clone())?,
+            to_vk: Self::optional_field(self.base_msg.to_vk.clone())?,
+            agent_did: Self::optional_field(self.base_msg.agent_did.clone())?,
+            agent_vk: Self::optional_field(self.base_msg.agent_vk.clone())?,
+            agent_payload: Self::optional_field(self.agent_payload.clone())?,
             payload: GetMessagesPayload {
                 msg_type: MsgType { name: "GET_MSGS".to_string(), ver: "1.0".to_string() },
                 exclude_payload: self.exclude_payload,

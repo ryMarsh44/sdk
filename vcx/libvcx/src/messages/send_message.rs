@@ -99,12 +99,12 @@ impl GeneralMessageBuilder for SendMessageBuilder {
             agent_did: self.base_msg.agent_did.clone().ok_or(build_err)??,
             agent_vk: self.base_msg.agent_vk.clone().ok_or(build_err)??,
             payload: self.payload.clone().ok_or(build_err)??,
-            agent_payload: self.optional_field(self.agent_payload.clone())?,
-            ref_msg_id: self.optional_field(self.ref_msg_id.clone())?,
-            status_code: self.optional_field(self.status_code.clone())?,
-            uid: self.optional_field(self.uid.clone())?,
-            title: self.optional_field(self.title.clone())?,
-            detail: self.optional_field(self.detail.clone())?,
+            agent_payload: Self::optional_field(self.agent_payload.clone())?,
+            ref_msg_id: Self::optional_field(self.ref_msg_id.clone())?,
+            status_code: Self::optional_field(self.status_code.clone())?,
+            uid: Self::optional_field(self.uid.clone())?,
+            title: Self::optional_field(self.title.clone())?,
+            detail: Self::optional_field(self.detail.clone())?,
         })
     }
 }
@@ -112,39 +112,39 @@ impl GeneralMessageBuilder for SendMessageBuilder {
 impl SendMessageBuilder{
 
     pub fn msg_type(mut self, msg: &str) -> SendMessageBuilder{
-        self.message = self.wrap_ok(msg.to_string());
+        self.message = Self::wrap_ok(msg.to_string());
         self
     }
 
     pub fn uid(mut self, uid: &str) -> SendMessageBuilder{
-        self.uid = self.wrap_ok(uid.to_string());
+        self.uid = Self::wrap_ok(uid.to_string());
         self
     }
 
     pub fn status_code(mut self, code: &str) -> SendMessageBuilder {
-        self.status_code = self.wrap_ok(code.to_string());
+        self.status_code = Self::wrap_ok(code.to_string());
         self
     }
 
 
     pub fn edge_agent_payload(mut self, payload: &Vec<u8>) -> SendMessageBuilder {
-        self.payload = self.wrap_ok(payload.clone());
+        self.payload = Self::wrap_ok(payload.clone());
         self
     }
 
     pub fn ref_msg_id(mut self, id: &str) -> SendMessageBuilder {
-        self.ref_msg_id = self.wrap_ok(id.to_string());
+        self.ref_msg_id = Self::wrap_ok(id.to_string());
         self
     }
 
 
     pub fn set_title(mut self, title: &str) -> SendMessageBuilder {
-        self.title = self.wrap_ok(title.to_string());
+        self.title = Self::wrap_ok(title.to_string());
         self
     }
 
     pub fn set_detail(mut self, detail: &str) -> SendMessageBuilder {
-        self.detail = self.wrap_ok(detail.to_string());
+        self.detail = Self::wrap_ok(detail.to_string());
         self
     }
 }

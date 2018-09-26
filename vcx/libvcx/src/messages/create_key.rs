@@ -92,9 +92,9 @@ impl GeneralMessageBuilder for CreateKeyMsgBuilder {
 
         Ok(CreateKeyMsg {
             to_did: self.base_msg.to_did.clone().ok_or(build_err)??,
-            to_vk: self.optional_field(self.base_msg.to_vk.clone())?,
-            agent_did: self.optional_field(self.base_msg.agent_did.clone())?,
-            agent_vk: self.optional_field(self.base_msg.agent_vk.clone())?,
+            to_vk: Self::optional_field(self.base_msg.to_vk.clone())?,
+            agent_did: Self::optional_field(self.base_msg.agent_did.clone())?,
+            agent_vk: Self::optional_field(self.base_msg.agent_vk.clone())?,
             payload: CreateKeyPayload {
                 msg_type: MsgType { name: "CREATE_KEY".to_string(), ver: "1.0".to_string()},
                 for_did: self.for_did.clone().ok_or(build_err)??,

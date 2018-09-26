@@ -314,15 +314,15 @@ pub trait GeneralMessage {
 }
 
 pub trait MsgUtils {
-    fn optional_field<T>(&self, field: Option<Result<T, u32>>) -> Result<Option<T>, u32> {
+    fn optional_field<T>(field: Option<Result<T, u32>>) -> Result<Option<T>, u32> {
         field.map_or(Ok(None), |rc| {
             rc.map(|x| Some(x))
         })
     }
 
-    fn wrap_ok<T>(&self, field: T) -> Option<Result<T, u32>>  { Some(Ok(field)) }
+    fn wrap_ok<T>(field: T) -> Option<Result<T, u32>>  { Some(Ok(field)) }
 
-    fn wrap_err<T>(&self, err: u32) -> Option<Result<T, u32>> { Some(Err(err))}
+    fn wrap_err<T>(err: u32) -> Option<Result<T, u32>> { Some(Err(err)) }
 }
 
 pub fn create_keys() -> CreateKeyMsgBuilder { CreateKeyMsgBuilder::new() }

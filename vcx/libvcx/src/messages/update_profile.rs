@@ -84,7 +84,7 @@ impl UpdateProfileDataBuilder {
     pub fn build(self) -> Result<UpdateProfileData, u32> {
         let mut configs  = Vec::new();
         if let Some(name) = self.name.clone() { configs.push(name) };
-        if let Some(url) = self.optional_field(self.logo_url.clone())? { configs.push(url) };
+        if let Some(url) = Self::optional_field(self.logo_url.clone())? { configs.push(url) };
 
         Ok(UpdateProfileData {
             to_did: self.to_did.clone().ok_or(error::MISSING_MSG_FIELD.code_num)??,

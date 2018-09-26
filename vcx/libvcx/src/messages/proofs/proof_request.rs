@@ -106,17 +106,17 @@ impl ProofRequestBuilder {
     }
 
     pub fn type_version(mut self, version: &str) -> ProofRequestBuilder {
-        self.type_version = self.wrap_ok(version.to_string());
+        self.type_version = Self::wrap_ok(version.to_string());
         self
     }
 
     pub fn tid(mut self, tid: u32) -> ProofRequestBuilder {
-        self.tid = self.wrap_ok(tid);
+        self.tid = Self::wrap_ok(tid);
         self
     }
 
     pub fn mid(mut self, mid: u32) -> ProofRequestBuilder {
-        self.mid = self.wrap_ok(mid);
+        self.mid = Self::wrap_ok(mid);
         self
     }
 
@@ -126,12 +126,12 @@ impl ProofRequestBuilder {
     }
 
     pub fn proof_name(mut self, name: &str) -> ProofRequestBuilder {
-        self.name = self.wrap_ok(name.to_string());
+        self.name = Self::wrap_ok(name.to_string());
         self
     }
 
     pub fn proof_data_version(mut self, version: &str) -> ProofRequestBuilder {
-        self.data_version = self.wrap_ok(version.to_string());
+        self.data_version = Self::wrap_ok(version.to_string());
         self
     }
 
@@ -141,7 +141,7 @@ impl ProofRequestBuilder {
             Ok(a) => a,
             Err(e) => {
                 debug!("Cannot parse attributes: {}", e);
-                self.requested_attributes = self.wrap_err(error::INVALID_JSON.code_num);
+                self.requested_attributes = Self::wrap_err(error::INVALID_JSON.code_num);
                 return self
             }
         };
@@ -153,7 +153,7 @@ impl ProofRequestBuilder {
                 check_req_attrs.insert(attr.name.clone(), attr.clone());
             }
         }
-        self.requested_attributes = self.wrap_ok(check_req_attrs);
+        self.requested_attributes = Self::wrap_ok(check_req_attrs);
         self
     }
 
@@ -163,7 +163,7 @@ impl ProofRequestBuilder {
             Ok(a) => a,
             Err(e) => {
                 debug!("Cannot parse predicates: {}", e);
-                self.requested_predicates = self.wrap_err(error::INVALID_JSON.code_num);
+                self.requested_predicates = Self::wrap_err(error::INVALID_JSON.code_num);
                 return self
             },
         };
@@ -176,7 +176,7 @@ impl ProofRequestBuilder {
             }
         }
 
-        self.requested_predicates = self.wrap_ok(check_predicates);
+        self.requested_predicates = Self::wrap_ok(check_predicates);
         self
     }
 
